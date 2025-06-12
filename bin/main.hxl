@@ -1,0 +1,5 @@
+using "io.hxh"
+fun main(void) {
+	var str:String;
+	str = L"hello";
+}

@@ -20,9 +20,14 @@ typedef struct TokenStream {
     Token* tokens;
     long int size;
 } TokenStream;
-const wchar_t* keywords_2[] = {L"if\0",NULL};
-const wchar_t* keywords_3[] = {L"var\0",L"con\0",L"int\0",L"for\0",L"fun\0",NULL};
-const wchar_t* keywords_4[] = {L"char\0",L"bool\0",L"true\0",L"else\0",L"goto\0",L"case\0",L"void\0",NULL};
+typedef struct LexerStatus {
+    long int lin;     //行
+    long int col;    //列
+} LexerStatus;
+LexerStatus lexerStatus;       //词法分析器状态
+const wchar_t* keywords_2[] = {L"if\0",L"如果\0",L"整型\0",NULL};
+const wchar_t* keywords_3[] = {L"var\0",L"浮点型\0",L"字符型\0",L"布尔型",L"con\0",L"int\0",L"for\0",L"fun\0",NULL};
+const wchar_t* keywords_4[] = {L"char\0",L"定义变量\0",L"定义常量\0",L"定义函数\0",L"bool\0",L"true\0",L"else\0",L"goto\0",L"case\0",L"void\0",NULL};
 const wchar_t* keywords_5[] = {L"float\0",L"wchar\0",L"false\0",L"break\0",L"class\0",L"using\0",NULL};
 const wchar_t* keywords_6[] = {L"double\0",L"sizeOf\0",L"switch\0",L"return\0",NULL};
 const wchar_t* keywords_7[] = {L"default\0",NULL};
@@ -45,10 +50,15 @@ TokenStream getToken(const wchar_t* src) {
     wchar_t* p = src;
     while(*p!=L'\0') {
         if(iswspace(*p)) {
+            if(*p==L'\n') {
+                lexerStatus.lin++;
+                lexerStatus.col = 0;
+            }
             p++;
+            lexerStatus.lin++;
             continue;
         }
-        if(*p==L'#') {
+        if(*p==L'#') {              //处理注释
             while(*p!=L'\0'&&*p!=L'\n') p++;
             continue;
         }
@@ -82,6 +92,37 @@ TokenStream getToken(const wchar_t* src) {
             tokenStream.tokens[index] = newToken;
             index++;
             continue;
+        } else if((*p == L'L') && (*(p+1) == L'\"'||*(p+1)==L'“' ||*(p+1)==L'”')) {    //宽字符串
+            const wchar_t start_quote = *(p+1); // 记录开始引号类型
+            const wchar_t* p_end = p+2; // 跳过 L 和引号
+
+            // 查找结束引号
+            int escape = 0;
+            while(*p_end != L'\0') {
+                if(!escape && *p_end == start_quote) {
+                    break; // 找到匹配的结束引号
+                }
+                escape = (*p_end == L'\\') ? 1 : 0; // 处理转义字符
+                p_end++;
+            }
+
+            // 检查字符串是否正常结束
+            if(*p_end != start_quote) {
+                fprintf(stderr, "\033[31m[E]词法错误：宽字符串没有结尾！(位于第%ld行,%ld列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
+                cleanupToken(&tokenStream);
+                return tokenStream;
+            }
+
+            // 创建Token (包含L前缀和引号)
+            newToken.length = p_end - p + 1;
+            newToken.value = malloc((newToken.length + 1) * sizeof(wchar_t));
+            wcsncpy(newToken.value, p, newToken.length);
+            newToken.value[newToken.length] = L'\0';
+            newToken.type = TOKEN_VALUE;
+
+            tokenStream.tokens[index++] = newToken;
+            p = p_end + 1; // 移动到结束引号之后
+            continue;
         } else if(*p == L'\"'||*p==L'“' ||*p==L'”') {   //字符串
             wchar_t* p_end = p;
             while(*p_end!=L'\0') {
@@ -91,7 +132,7 @@ TokenStream getToken(const wchar_t* src) {
                 }
             }
             if (*p_end != *p || (p_end > p+1 && *(p_end-1) == L'\\')) {
-                fprintf(stderr,"\033[31m[E]词法错误：字符串没有结尾！\033[0m\n");
+                fprintf(stderr,"\033[31m[E]词法错误：字符串没有结尾！(位于第%ld行,%ld列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
                 cleanupToken(&tokenStream);
                 return tokenStream;
             }
@@ -250,12 +291,7 @@ void cleanupToken(TokenStream* ts) {
     // 遍历实际生成的Token数量（不是预分配的大小）
     for (int i = 0; i < ts->size; i++) {
         if (ts->tokens[i].value) {
-
-
-            printf("Token%d {\n   value=\"%ls\"\n",i,ts->tokens[i].value);
-            printf("   type=%d\n}\n---------------------\n",ts->tokens[i].type);
-
-
+            printf("Token%d {\n\tvalue= %ls\n\ttype=%d\n}\n",i,ts->tokens[i].value,ts->tokens[i].type);
             free(ts->tokens[i].value);
             ts->tokens[i].value = NULL; // 避免悬空指针
         }

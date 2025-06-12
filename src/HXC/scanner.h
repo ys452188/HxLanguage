@@ -34,7 +34,6 @@ wchar_t* getData(const char* path) {
 #endif
         return NULL;
     }
-
     wchar_t ch;
     size_t index = 0;
     while ((ch = fgetwc(fp)) != WEOF) {
