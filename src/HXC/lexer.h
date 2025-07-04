@@ -37,6 +37,7 @@ bool isOperator(const wchar_t);
 void cleanupToken(TokenStream*);
 TokenStream getToken(const wchar_t*);
 TokenStream getToken(const wchar_t* src) {
+    lexerStatus.lin=1;
     TokenStream tokenStream = {0};
     if(src==NULL) return tokenStream;
     tokenStream.size = 1;
@@ -49,13 +50,13 @@ TokenStream getToken(const wchar_t* src) {
     int index = 0;
     wchar_t* p = src;
     while(*p!=L'\0') {
-        if(iswspace(*p)) {
-            if(*p==L'\n') {
-                lexerStatus.lin++;
-                lexerStatus.col = 0;
-            }
-            p++;
+        if(*p==L'\n') {
             lexerStatus.lin++;
+            lexerStatus.col = 0;
+        }
+        if(iswspace(*p)) {
+            p++;
+            lexerStatus.col++;
             continue;
         }
         if(*p==L'#') {              //处理注释
@@ -291,7 +292,7 @@ void cleanupToken(TokenStream* ts) {
     // 遍历实际生成的Token数量（不是预分配的大小）
     for (int i = 0; i < ts->size; i++) {
         if (ts->tokens[i].value) {
-            printf("Token%d {\n\tvalue= %ls\n\ttype=%d\n}\n",i,ts->tokens[i].value,ts->tokens[i].type);
+            //printf("Token%d {\n\tvalue= %ls\n\ttype=%d\n}\n",i,ts->tokens[i].value,ts->tokens[i].type);
             free(ts->tokens[i].value);
             ts->tokens[i].value = NULL; // 避免悬空指针
         }
