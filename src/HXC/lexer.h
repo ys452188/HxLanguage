@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 typedef enum {
-    TOKEN_KEYWORD,       /*关键字*/
+    TOKEN_KEYWORD=0,       /*关键字*/
     TOKEN_VALUE,          /*数据*/
     TOKEN_INDENTIFIER,    /*标识符*/
     TOKEN_OPERATOR,      /*运算符号*/
@@ -15,14 +15,16 @@ typedef struct Token {
     TokenType type;    /*这个Token的类型,用于标识这个Token大概是什么*/
     wchar_t* value;    /*具体代码*/
     size_t length;
+    int lin;
+    int col;
 } Token;
 typedef struct TokenStream {
     Token* tokens;
     long int size;
 } TokenStream;
 typedef struct LexerStatus {
-    long int lin;     //行
-    long int col;    //列
+    int lin;     //行
+    int col;    //列
 } LexerStatus;
 LexerStatus lexerStatus;       //词法分析器状态
 const wchar_t* keywords_2[] = {L"if\0",L"如果\0",L"整型\0",NULL};
@@ -89,6 +91,8 @@ TokenStream getToken(const wchar_t* src) {
             wcsncpy(newToken.value,p,newToken.length);
             newToken.value[newToken.length] = L'\0';
             newToken.type = TOKEN_VALUE;
+            newToken.lin = lexerStatus.lin;
+            newToken.col = lexerStatus.col;
             p = p_end;
             tokenStream.tokens[index] = newToken;
             index++;
@@ -109,7 +113,7 @@ TokenStream getToken(const wchar_t* src) {
 
             // 检查字符串是否正常结束
             if(*p_end != start_quote) {
-                fprintf(stderr, "\033[31m[E]词法错误：宽字符串没有结尾！(位于第%ld行,%ld列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
+                fprintf(stderr, "\033[31m[E]词法错误：宽字符串没有结尾！(位于第%d行,%d列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
                 cleanupToken(&tokenStream);
                 return tokenStream;
             }
@@ -120,7 +124,8 @@ TokenStream getToken(const wchar_t* src) {
             wcsncpy(newToken.value, p, newToken.length);
             newToken.value[newToken.length] = L'\0';
             newToken.type = TOKEN_VALUE;
-
+            newToken.lin = lexerStatus.lin;
+            newToken.col = lexerStatus.col;
             tokenStream.tokens[index++] = newToken;
             p = p_end + 1; // 移动到结束引号之后
             continue;
@@ -133,7 +138,7 @@ TokenStream getToken(const wchar_t* src) {
                 }
             }
             if (*p_end != *p || (p_end > p+1 && *(p_end-1) == L'\\')) {
-                fprintf(stderr,"\033[31m[E]词法错误：字符串没有结尾！(位于第%ld行,%ld列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
+                fprintf(stderr,"\033[31m[E]词法错误：字符串没有结尾！(位于第%d行,%d列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
                 cleanupToken(&tokenStream);
                 return tokenStream;
             }
@@ -147,6 +152,8 @@ TokenStream getToken(const wchar_t* src) {
             wcsncpy(newToken.value,p,newToken.length);
             newToken.value[newToken.length] = L'\0';
             newToken.type = TOKEN_VALUE;
+            newToken.lin = lexerStatus.lin;
+            newToken.col = lexerStatus.col;
             tokenStream.tokens[index] = newToken;
             index++;
             p = p_end+1;
@@ -179,6 +186,8 @@ TokenStream getToken(const wchar_t* src) {
             wcsncpy(newToken.value, p, op_length);
             newToken.value[op_length] = L'\0';
             newToken.type = TOKEN_OPERATOR;
+            newToken.lin = lexerStatus.lin;
+            newToken.col = lexerStatus.col;
             // 添加到Token流
             tokenStream.tokens[index] = newToken;
             index++;
@@ -205,6 +214,8 @@ TokenStream getToken(const wchar_t* src) {
             } else {
                 newToken.type = TOKEN_INDENTIFIER;
             }
+            newToken.lin = lexerStatus.lin;
+            newToken.col = lexerStatus.col;
             p = p_end;
             tokenStream.tokens[index] = newToken;
             index++;

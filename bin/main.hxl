@@ -4,3 +4,4 @@ fun main(void) {
 	var newVar = 0x8A;
 	str = L"hello";
 }
+fun func();

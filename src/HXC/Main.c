@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "lexer.h"
 #include "scanner.h"
 #include "compiler.h"'
@@ -13,5 +14,7 @@ int main(int argc,char** argv) {
     ObjectCode obj;
     compile(&t,&obj);
     cleanupToken(&t);
+    freeObjectCode(&obj);
+    printf("\33[0m\n");
     return 0;
 }
