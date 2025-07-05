@@ -10,12 +10,14 @@ wchar_t* getData(const char* path) {
     /*Windows 下使用 UTF-8 编码*/
 #ifdef _WIN32
     FILE* fp = fopen(path, "r,ccs=UTF-8");
+#include <locale.h>
+    setlocale(LC_ALL,"zh_CN.UTF-8");
 #else
     FILE* fp = fopen(path, "r");
 #endif
     if (fp == NULL) {
 #ifdef _WIN32
-        fprintf(stderr, "[E]错误：无法打开文件 %s (%s)\n", path, strerror(errno));
+        fwprintf(stderr, L"\033[31m[E]错误：无法打开文件 %s (%s)\033[0m\n", path, strerror(errno));
 #else
         fprintf(stderr, "\033[31m[E]错误：无法打开文件 %s (%s)\033[0m\n", path, strerror(errno));
 #endif
@@ -27,10 +29,10 @@ wchar_t* getData(const char* path) {
     wchar_t* data = (wchar_t*)malloc(sizeof(wchar_t) * size);
     if (!data) {
         fclose(fp);
-#ifdef _WIN32
-        fprintf(stderr, "[E]内存分配失败！\n");
+#ifndef _WIN32
+        fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
 #else
-        fprintf(stderr, "\033[31m[E]内存分配失败！\033[0m\n");
+        fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
 #endif
         return NULL;
     }
@@ -42,10 +44,10 @@ wchar_t* getData(const char* path) {
             if (!temp) {
                 fclose(fp);
                 free(data);
-#ifdef _WIN32
-                fprintf(stderr, "[E]内存分配失败\n");
+#ifndef _WIN32
+                fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
 #else
-                fprintf(stderr, "\033[31m[E]内存分配失败！\033[0m\n");
+                fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
 #endif
                 return NULL;
             }
@@ -61,10 +63,10 @@ wchar_t* getData(const char* path) {
         if (!temp) {
             fclose(fp);
             free(data);
-#ifdef _WIN32
-            fprintf(stderr, "[E]内存分配失败！\n");
+#ifndef _WIN32
+            fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
 #else
-            fprintf(stderr, "\033[31m[E]内存分配失败\033[0m\n");
+            fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
 #endif
             return NULL;
         }

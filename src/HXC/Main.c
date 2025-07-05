@@ -2,9 +2,8 @@
 #include <stdlib.h>
 #include "lexer.h"
 #include "scanner.h"
-#include "compiler.h"'
-int main(int argc,char** argv) {
-    printf("\033[32m");
+#include "compiler.h"
+int main(void) {
     wchar_t* src = getData("main.hxl");
     if(src == NULL) {
         return 255;
@@ -12,9 +11,9 @@ int main(int argc,char** argv) {
     TokenStream t = getToken(src);
     free(src);
     ObjectCode obj;
-    compile(&t,&obj);
+    int err = compile(&t,&obj);
+    printf("%d\n",err);
     cleanupToken(&t);
     freeObjectCode(&obj);
-    printf("\33[0m\n");
     return 0;
 }

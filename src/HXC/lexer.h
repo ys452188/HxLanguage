@@ -39,13 +39,21 @@ bool isOperator(const wchar_t);
 void cleanupToken(TokenStream*);
 TokenStream getToken(const wchar_t*);
 TokenStream getToken(const wchar_t* src) {
+#ifdef _WIN32
+#include <locale.h>
+    setlocale(LC_ALL,"zh_CN.UTF-8");
+#endif
     lexerStatus.lin=1;
     TokenStream tokenStream = {0};
     if(src==NULL) return tokenStream;
     tokenStream.size = 1;
     tokenStream.tokens = (Token*)malloc(sizeof(Token));
     if(!tokenStream.tokens) {
+#ifndef _WIN32
         fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+        fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
         tokenStream.size = 0;
         return tokenStream;
     }
@@ -69,7 +77,11 @@ TokenStream getToken(const wchar_t* src) {
             tokenStream.size+=1;
             void* temp = realloc(tokenStream.tokens,tokenStream.size*sizeof(Token));
             if(!temp) {
+#ifndef _WIN32
                 fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+                fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
                 cleanupToken(&tokenStream);
                 return tokenStream;
             }
@@ -84,7 +96,11 @@ TokenStream getToken(const wchar_t* src) {
             newToken.length = p_end-p;
             newToken.value = (wchar_t*)malloc((newToken.length+1)*sizeof(wchar_t));
             if(!newToken.value) {
+#ifndef _WIN32
                 fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+                fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
                 cleanupToken(&tokenStream);
                 return tokenStream;
             }
@@ -113,7 +129,11 @@ TokenStream getToken(const wchar_t* src) {
 
             // 检查字符串是否正常结束
             if(*p_end != start_quote) {
+#ifndef _WIN32
                 fprintf(stderr, "\033[31m[E]词法错误：宽字符串没有结尾！(位于第%d行,%d列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
+#else
+                fwprintf(stderr, L"\033[31m[E]词法错误：宽字符串没有结尾！(位于第%d行,%d列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
+#endif
                 cleanupToken(&tokenStream);
                 return tokenStream;
             }
@@ -138,14 +158,22 @@ TokenStream getToken(const wchar_t* src) {
                 }
             }
             if (*p_end != *p || (p_end > p+1 && *(p_end-1) == L'\\')) {
-                fprintf(stderr,"\033[31m[E]词法错误：字符串没有结尾！(位于第%d行,%d列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
+#ifndef _WIN32
+                fprintf(stderr, "\033[31m[E]词法错误：字符串没有结尾！(位于第%d行,%d列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
+#else
+                fwprintf(stderr, L"\033[31m[E]词法错误：字符串没有结尾！(位于第%d行,%d列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
+#endif
                 cleanupToken(&tokenStream);
                 return tokenStream;
             }
             newToken.length = p_end-p+1;
             newToken.value = (wchar_t*)malloc((newToken.length + 1) * sizeof(wchar_t));
             if(!newToken.value) {
+#ifndef _WIN32
                 fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+                fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
                 cleanupToken(&tokenStream);
                 return tokenStream;
             }
@@ -179,7 +207,11 @@ TokenStream getToken(const wchar_t* src) {
             newToken.length = op_length;
             newToken.value = (wchar_t*)malloc((op_length + 1) * sizeof(wchar_t));
             if(!newToken.value) {
+#ifndef _WIN32
                 fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+                fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
                 cleanupToken(&tokenStream);
                 return tokenStream;
             }
@@ -203,7 +235,11 @@ TokenStream getToken(const wchar_t* src) {
             newToken.length = p_end-p;
             newToken.value = (wchar_t*)malloc((newToken.length+1)*sizeof(wchar_t));
             if(!newToken.value) {
+#ifndef _WIN32
                 fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+                fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
                 cleanupToken(&tokenStream);
                 return tokenStream;
             }

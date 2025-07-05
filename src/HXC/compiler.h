@@ -52,57 +52,83 @@ typedef struct ObjectCode {
 void freeObjectCode(ObjectCode*);
 int compile(TokenStream*,ObjectCode*);  //编译
 int compile(TokenStream* ts,ObjectCode* oc) {
+#ifdef _WIN32
+#include <locale.h>
+    setlocale(LC_ALL,"zh_CN.UTF-8");
+#endif
     if(ts->tokens==NULL) {
         return 255;
     }
     if(oc==NULL) {
         oc = (ObjectCode*)malloc(sizeof(ObjectCode));
         if(!oc) {
-            fprintf(stderr,"\033[31m[E]内存分配失败！\n\033[0m");
+#ifndef _WIN32
+            fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+            fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
             return 255;
         }
     }
     if(oc->functions==NULL) {
-        oc->functions = (Function*)malloc(sizeof(Function));
+        oc->functions = (Function*)malloc(sizeof(Function)*2);
         if(!oc->functions) {
-            fprintf(stderr,"\033[31m[E]内存分配失败！\n\033[0m");
+#ifndef _WIN32
+            fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+            fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
             return 255;
         }
-        oc->functionCount = 1;
+        oc->functionCount = 0;
     }
     if(oc->sentences==NULL) {
-        oc->sentences = (Sentence*)malloc(sizeof(Sentence));
+        oc->sentences = (Sentence*)malloc(sizeof(Sentence)*2);
         if(!oc->sentences) {
-            fprintf(stderr,"\033[31m[E]内存分配失败！\n\033[0m");
+#ifndef _WIN32
+            fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+            fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
             return 255;
         }
-        oc->sentenceCount = 1;
+        oc->sentenceCount = 0;
     }
     if(oc->blocks==NULL) {
-        oc->blocks = (Block*)malloc(sizeof(Block));
+        oc->blocks = (Block*)malloc(sizeof(Block)*2);
         if(!oc->blocks) {
-            fprintf(stderr,"\033[31m[E]内存分配失败！\n\033[0m");
+#ifndef _WIN32
+            fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+            fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
             return 255;
         }
-        oc->blockCount = 1;
+        oc->blockCount = 0;
     }
-    for(long int i; i < ts->size; i++) {
+    for(long int i = 0; i < ts->size; i++) {
+
         //printf("%ls\n",ts->tokens[i].value);
+
         switch((ts->tokens[i]).type) {
         case TOKEN_KEYWORD:    //关键字
             if((wcscmp((ts->tokens[i]).value,L"var") == 0)||(wcscmp((ts->tokens[i]).value,L"定义变量") == 0)) {         //var
                 int startIndex = i;
-                int endIndex;
-                for(long int i_1; i_1 < ts->size; i_1++) {
+                int endIndex = 0;
+                for(endIndex = startIndex; endIndex < ts->size; endIndex++) {
 
-                    //printf("%ls\n",ts->tokens[i_1].value);
+                    //printf("%ls\n",ts->tokens[endIndex].value);
 
-                    if(wcscmp((ts->tokens[i_1]).value,L";") == 0) {
-                        endIndex = i_1;
+                    if(wcscmp((ts->tokens[endIndex]).value,L";") == 0 || wcscmp((ts->tokens[endIndex]).value,L"；") == 0) {
+                        break;
                     }
                 }
                 if(endIndex==startIndex+1) {
+#ifndef _WIN32
                     fprintf(stderr,"\033[31m[E]关键字使用错误！\n(在%d行%d列)\n\033[0m",ts->tokens[startIndex].lin,ts->tokens[startIndex].col);
+#else
+                    fwprintf(stderr,L"\033[31m[E]关键字使用错误！\n(在%d行%d列)\n\033[0m",ts->tokens[startIndex].lin,ts->tokens[startIndex].col);
+#endif
                     return 255;
                 }
             } else if((wcscmp((ts->tokens[i]).value,L"con") == 0)||(wcscmp((ts->tokens[i]).value,L"定义常量") == 0)) {  //con
@@ -112,32 +138,47 @@ int compile(TokenStream* ts,ObjectCode* oc) {
                 index++;
                 Function newFunction;
                 if((ts->tokens[index].type) != TOKEN_INDENTIFIER) {
+#ifndef _WIN32
                     fprintf(stderr,"\033[31m[E]关键字使用错误！\n(在%d行%d列)\n\033[0m",ts->tokens[index].lin,ts->tokens[index].col);
+#else
+                    fwprintf(stderr,L"\033[31m[E]关键字使用错误！\n(在%d行%d列)\n\033[0m",ts->tokens[index].lin,ts->tokens[index].col);
+#endif
                     return 255;
                 }
                 newFunction.name = (wchar_t*)malloc(sizeof(wchar_t)*(wcslen(ts->tokens[index].value)+1));
                 if(!(newFunction.name)) {
-                    fprintf(stderr,"\033[31m[E]内存分配失败！\n\033[0m");
+#ifndef _WIN32
+                    fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+                    fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
                     return 255;
                 }
                 wcscpy(newFunction.name,ts->tokens[index].value);
-                newFunction.name[wcslen(newFunction.name)] = L'\0';
-                //printf("%ls\n",newFunction.name);
+
+                //printf("\n%ls\n",newFunction.name);
+
                 index++;
+
                 //printf("%ls\n",ts->tokens[index].value);
-                if(((ts->tokens[index].type) != TOKEN_OPERATOR) || (wcscmp(ts->tokens[index].value,L"(")!=0 && wcscmp(ts->tokens[index].value,L"；")!=0)) {
+
+                if(((ts->tokens[index].type) != TOKEN_OPERATOR) || (wcscmp(ts->tokens[index].value,L"(")!=0 && wcscmp(ts->tokens[index].value,L"（")!=0)) {
                     free(newFunction.name);
-                    fprintf(stderr,"\33[31m[E]声明函数时,函数名后应为括号\33[0m");
+#ifndef _WIN32
+                    fprintf(stderr,"\33[31m[E]声明函数时,函数名后应为括号\n(在%d行%d列)\n\33[0m",ts->tokens[index].lin,ts->tokens[index].col);
+#else
+                    fwprintf(stderr,L"\33[31m[E]声明函数时,函数名后应为括号\n(在%d行%d列)\n\33[0m",ts->tokens[index].lin,ts->tokens[index].col);
+#endif
                     return 255;
                 }
-
-                oc->functions[oc->functionCount-1] = newFunction;
-                oc->functionCount++;
-                void* tmp = realloc(oc->functions,oc->functionCount*sizeof(Function));
+                void* tmp = realloc(oc->functions,(oc->functionCount+3)*sizeof(Function));
                 if(!tmp) {
+                    free(newFunction.name);
                     return 255;
                 }
                 oc->functions = (Function*)tmp;
+                oc->functions[oc->functionCount] = newFunction;
+                oc->functionCount++;
             }
             break;
         case TOKEN_VALUE:      //字面量
