@@ -5,19 +5,24 @@
 #include <string.h>
 #include <wchar.h>
 #include <errno.h>
+#include <locale.h>
+#include "lexer.h"
 wchar_t* getData(const char*);             /*从文件获取数据*/
 wchar_t* getData(const char* path) {
     /*Windows 下使用 UTF-8 编码*/
 #ifdef _WIN32
     FILE* fp = fopen(path, "r,ccs=UTF-8");
-#include <locale.h>
     setlocale(LC_ALL,"zh_CN.UTF-8");
 #else
     FILE* fp = fopen(path, "r");
 #endif
     if (fp == NULL) {
 #ifdef _WIN32
-        fwprintf(stderr, L"\033[31m[E]错误：无法打开文件 %s (%s)\033[0m\n", path, strerror(errno));
+        wchar_t* path_wcs = charToWchar(path);
+        wchar_t* err_wcs = charToWchar(strerror(errno));
+        fwprintf(stderr, L"\033[31m[E]错误：无法打开文件 %s (%s)\033[0m\n", path_wcs, err_wcs);
+        free(path_wcs);
+        free(err_wcs);
 #else
         fprintf(stderr, "\033[31m[E]错误：无法打开文件 %s (%s)\033[0m\n", path, strerror(errno));
 #endif

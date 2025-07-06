@@ -5,6 +5,28 @@
 #include <wctype.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <locale.h>
+#include <wchar.h>
+wchar_t* charToWchar(const char* narrow_str) {
+    // 设置本地化环境（重要！）
+    setlocale(LC_ALL, ""); // 使用系统默认locale
+    // 计算需要的宽字符数量
+    size_t required_size = mbstowcs(NULL, narrow_str, 0) + 1;
+    if(required_size == (size_t)-1) {
+        // 转换失败（无效的多字节序列）
+        return NULL;
+    }
+    wchar_t* wide_str = (wchar_t*)malloc(required_size * sizeof(wchar_t));
+    if(!wide_str) {
+        return NULL;
+    }
+    if(mbstowcs(wide_str, narrow_str, required_size) == (size_t)-1) {
+        free(wide_str);
+        return NULL;
+    }
+    return wide_str;
+}
 typedef enum {
     TOKEN_KEYWORD=0,       /*关键字*/
     TOKEN_VALUE,          /*数据*/
@@ -40,7 +62,6 @@ void cleanupToken(TokenStream*);
 TokenStream getToken(const wchar_t*);
 TokenStream getToken(const wchar_t* src) {
 #ifdef _WIN32
-#include <locale.h>
     setlocale(LC_ALL,"zh_CN.UTF-8");
 #endif
     lexerStatus.lin=1;
