@@ -20,7 +20,7 @@ wchar_t* getData(const char* path) {
 #ifdef _WIN32
         wchar_t* path_wcs = charToWchar(path);
         wchar_t* err_wcs = charToWchar(strerror(errno));
-        fwprintf(stderr, L"\033[31m[E]错误：无法打开文件 %s (%s)\033[0m\n", path_wcs, err_wcs);
+        fwprintf(stderr, L"\033[31m[E]错误：无法打开文件 %ls (%ls)\033[0m\n", path_wcs, err_wcs);
         free(path_wcs);
         free(err_wcs);
 #else

@@ -9,9 +9,7 @@
 #include <locale.h>
 #include <wchar.h>
 wchar_t* charToWchar(const char* narrow_str) {
-    // 设置本地化环境（重要！）
     setlocale(LC_ALL, ""); // 使用系统默认locale
-    // 计算需要的宽字符数量
     size_t required_size = mbstowcs(NULL, narrow_str, 0) + 1;
     if(required_size == (size_t)-1) {
         // 转换失败（无效的多字节序列）
@@ -360,7 +358,9 @@ void cleanupToken(TokenStream* ts) {
     // 遍历实际生成的Token数量（不是预分配的大小）
     for (int i = 0; i < ts->size; i++) {
         if (ts->tokens[i].value) {
+
             //printf("Token%d {\n\tvalue= %ls\n\ttype=%d\n}\n",i,ts->tokens[i].value,ts->tokens[i].type);
+
             free(ts->tokens[i].value);
             ts->tokens[i].value = NULL; // 避免悬空指针
         }
