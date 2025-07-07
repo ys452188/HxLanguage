@@ -5,6 +5,18 @@
 #include <wchar.h>
 #include <locale.h>
 #include "lexer.h"
+// 释放指针ptr指向的内存空间
+void hxFree(void* ptr) {
+    // 如果ptr为空，则直接返回
+    if(ptr == NULL) return;
+    //printf("freeing %p\n",ptr);
+    // 释放ptr指向的内存空间
+    free(ptr);
+    // 将ptr置为空指针
+    ptr = NULL;
+    // 返回
+    return;
+}
 typedef enum {
     TOK_ADD,    //加
     TOK_MIN,    //减
@@ -148,7 +160,7 @@ int compile(TokenStream* ts,ObjectCode* oc) {
 #else
                     fwprintf(stderr,L"\33[31m[E]声明函数时,函数名后应为括号\n(在%d行%d列)\n\33[0m",ts->tokens[index].lin,ts->tokens[index].col);
 #endif
-                    free(newFunction.name);
+                    hxFree(newFunction.name);
                     return 255;
                 }
                 /*
@@ -160,14 +172,14 @@ int compile(TokenStream* ts,ObjectCode* oc) {
                 #else
                     fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
                 #endif
-                    free(newFunction.name);
+                    hxFree(newFunction.name);
                     return 255;
                 }
                 oc->functions = (Function*)tmp;
                 oc->functions[oc->function_count] = newFunction;
                 oc->function_count++;
                 */
-                free(newFunction.name);
+                hxFree(newFunction.name);
             }
             break;
         case TOKEN_VALUE:      //字面量
@@ -219,35 +231,27 @@ void freeBlock(Block* block) {
             if(sentence -> tokens) {
                 for(int i1 = 0; i1 < sentence->size; i1++) {
                     if(sentence->tokens[i1].owns_memory) {
-
-                        printf("释放 %p\n",block->sentences[i].tokens[i1].value.val);
-
-                        free(block->sentences[i].tokens[i1].value.val);
+                        //printf("1释放 %p\n",block->sentences[i].tokens[i1].value.val);
+                        hxFree(block->sentences[i].tokens[i1].value.val);
                     }
                 }
-
-                printf("释放 %p\n", block->sentences[i].tokens);
-
-                free(block->sentences[i].tokens);
+                //printf("2释放 %p\n", block->sentences[i].tokens);
+                hxFree(block->sentences[i].tokens);
             }
         }
-
-        printf("释放 %p\n", block->sentences);
-
-        free(block->sentences);
+        //printf("3释放 %p\n", block->sentences);
+        hxFree(block->sentences);
     }
     if(block->children) {
         for(int i = 0; i<=block->child_count; i++) {
             if(block->children[i]) {
-
-                printf("释放 %p\n",block->children[i]);
-
+                //printf("4释放 %p\n",block->children[i]);
                 freeBlock(block->children[i]);
             }
         }
-        free(block->children);
+        hxFree(block->children);
     }
-    free(block);
+    hxFree(block);
     return;
 }
 void freeObjectCode(ObjectCode* oc) {
@@ -255,44 +259,35 @@ void freeObjectCode(ObjectCode* oc) {
         for(int i=0; i<=oc->global_block_count; i++) {
             freeBlock(oc->global_blocks[i]);
         }
-
-        printf("释放 %p\n",*(oc->global_blocks));
-
-        if(*(oc->global_blocks)) free(*(oc->global_blocks));
-        if(oc->global_blocks) free(oc->global_blocks);
+        //printf("5释放 %p\n",*(oc->global_blocks));
+        if(oc->global_blocks) hxFree(oc->global_blocks);
     }
     if(oc->functions) {
         for(int i=0; i<=oc->function_count; i++) {
             if(oc->functions[i].name) {
-
-                printf("释放 %p\n",oc->functions[i].name);
-
-                free(oc->functions[i].name);
+                //printf("6释放 %p\n",oc->functions[i].name);
+                hxFree(oc->functions[i].name);
             }
             if(oc->functions[i].main_block) {
                 freeBlock(oc->functions[i].main_block);
             }
         }
-
-        printf("释放 %p\n",oc->functions);
-
-        free(oc->functions);
+        //printf("7释放 %p\n",oc->functions);
+        hxFree(oc->functions);
     }
     if(oc->global_sentences) {
         for(int i = 0; i <= oc->global_sentence_count; i++) {
             if(oc->global_sentences[i].tokens) {
                 for(int i1 = 0; i1<oc->global_sentences[i].size; i1++) {
                     if(oc->global_sentences[i].tokens[i1].owns_memory) {
-                        free(oc->global_sentences[i].tokens[i1].value.val);
+                        hxFree(oc->global_sentences[i].tokens[i1].value.val);
                     }
                 }
-                free(oc->global_sentences[i].tokens);
+                hxFree(oc->global_sentences[i].tokens);
             }
         }
-
-        printf("释放 %p\n",oc->global_sentences);
-
-        free(oc->global_sentences);
+        //printf("8释放 %p\n",oc->global_sentences);
+        hxFree(oc->global_sentences);
     }
     return;
 }

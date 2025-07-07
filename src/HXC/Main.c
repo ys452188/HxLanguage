@@ -26,8 +26,11 @@ int main(void) {
         freeObjectCode(&obj);
         return -1;
     }
-    printf("\33[32m编译完成。\33[0m\n");
     freeObjectCode(&obj);
-    printf("Hello,world!\n");
+#ifndef _WIN32
+    printf("\33[32m编译完成。\33[0m\n");
+#else
+    wprintf(L"\33[32m编译完成。\33[0m\n");
+#endif
     return 0;
 }

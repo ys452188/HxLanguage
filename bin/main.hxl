@@ -1,6 +1,8 @@
 using "io.hxh"
 fun main(void) {
+#var;
 	var str:String;
 	var newVar = 0x8A;
 	str = L"hello";
+	return;
 }
