@@ -122,7 +122,11 @@ int compile(TokenStream* ts,ObjectCode* oc) {
                     }
                     int err = setArgs(ts->tokens,&index,&newFunction);
                     if(err != 0) {
-                        hxFree(&(newFunction.name));
+                        hxFree(&(newFunction.name)); 
+                        if(newFunction.argc == 0) {
+                            hxFree(&(newFunction.args));
+                        	return 255;
+                        }
                         for(int j = 0; j<=newFunction.argc; j++) {
                             hxFree(&(newFunction.args[j].name));
                             hxFree(&(newFunction.args[j].type));
@@ -151,6 +155,10 @@ int compile(TokenStream* ts,ObjectCode* oc) {
                     fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
 #endif
                     hxFree(&(newFunction.name));
+                    if(newFunction.argc == 0) {
+                        hxFree(&(newFunction.args));
+                    	return 255;
+                    }
                     for(int j = 0; j<=newFunction.argc; j++) {
                         hxFree(&(newFunction.args[j].name));
                         hxFree(&(newFunction.args[j].type));
@@ -159,6 +167,24 @@ int compile(TokenStream* ts,ObjectCode* oc) {
                     return 255;
                 }
                 oc->functions = (Function*)tmp;
+                if(isDuplicateDefineFunction(&newFunction,oc->functions,oc->function_count+1) == 1) {
+#ifndef _WIN32
+                    fprintf(stderr,"\033[31m[E]函数被重复定义！\n(在%d行%d列)\033[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#else
+                    fwprintf(stderr,L"\033[31m[E]函数被重复定义！\n(在%d行%d列)\033[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#endif
+                    hxFree(&(newFunction.name));
+                    if (newFunction.argc == 0) {
+                        hxFree(&(newFunction.args));
+                        return 255;
+                    }
+                    for(int j = 0; j<=newFunction.argc; j++) {
+                        hxFree(&(newFunction.args[j].name));
+                        hxFree(&(newFunction.args[j].type));
+                    }
+                    hxFree(&(newFunction.args));
+                    return 255;
+                }
                 oc->functions[oc->function_count] = newFunction;
                 printf("%ls\n",oc->functions[oc->function_count].name);
                 oc->function_count++;

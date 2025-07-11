@@ -1,7 +1,13 @@
-using "io.hxh"
-fun main() {
+using "io.hxh";
+fun main():int {
 	var str:String;
 	var newVar = 0x8A;
 	str = L"hello";
-	return;
+	return 0;
+}
+fun newFunc():int {
+	var str:String;
+	var newVar = 0x8A;
+	str = L"hello";
+	return 0;
 }

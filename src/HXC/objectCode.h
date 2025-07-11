@@ -68,6 +68,7 @@ typedef struct Constant {
 // 函数
 typedef struct Function {
     wchar_t* name;            // 函数名
+    wchar_t* ret_type;
     Variable* args;
     int argc;
     Block* main_block;        // 主代码块
@@ -87,6 +88,26 @@ typedef struct VarSymTable {
     wchar_t* name;
     wchar_t* type;
 } VarSymTable;
+int isDuplicateDefineFunction(const Function* user_func, Function* table,int table_length) {
+    if(table == NULL) return 0;
+    if(user_func == NULL) return -1;
+    //printf("%ls\n",user_func->name);
+    for(int i = 0; i < table_length; i++) {
+        if(table[i].name == NULL) continue;
+        if((wcscmp(user_func->name,table[i].name) == 0) && (user_func->argc == table[i].argc)) {
+            if(user_func->argc == 0) return 1;
+            for(int j = 0; j <= user_func->argc; j++) {
+                if(wcscmp(user_func->args[j].type,table[i].args[j].type) != 0) {
+                    return 0;
+                }
+            }
+            return 1;
+        } else {
+            continue;
+        }
+    }
+    return 0;
+}
 int initObjectCode(ObjectCode*);
 void freeObjectCode(ObjectCode*);
 int setArgs(Token* p,int* index,Function* func);
@@ -164,6 +185,19 @@ void freeObjectCode(ObjectCode* oc) {
         if(oc->global_blocks) hxFree(&(oc->global_blocks));
     }
     if(oc->functions) {
+        for(int i = 0; i < oc->function_count; i++) {
+            if(oc->functions[i].argc == 0) {   //argc为0即该function的args为NULL
+                hxFree(&(oc->functions[i].args));
+                hxFree(&(oc->functions[i].name));
+            } else {
+                for(int j = 0; j<= oc->functions[i].argc; j++) {
+                    hxFree(&(oc->functions[i].args[j].name));
+                    hxFree(&(oc->functions[i].args[j].type));
+                }
+                hxFree(&(oc->functions[i].args));
+                hxFree(&(oc->functions[i].name));
+            }
+        }
         printf("7释放 %p\n",oc->functions);
         hxFree(&(oc->functions));
     }
