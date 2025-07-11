@@ -47,11 +47,11 @@ typedef struct LexerStatus {
     int col;    //列
 } LexerStatus;
 LexerStatus lexerStatus;       //词法分析器状态
-const wchar_t* keywords_2[] = {L"if\0",L"如果\0",L"整型\0",NULL};
+const wchar_t* keywords_2[] = {L"if\0",L"如果\0",L"整型\0",L"否则\0",NULL};
 const wchar_t* keywords_3[] = {L"var\0",L"浮点型\0",L"字符型\0",L"布尔型",L"con\0",L"int\0",L"for\0",L"fun\0",NULL};
 const wchar_t* keywords_4[] = {L"char\0",L"定义变量\0",L"定义常量\0",L"定义函数\0",L"bool\0",L"true\0",L"else\0",L"goto\0",L"case\0",L"void\0",NULL};
-const wchar_t* keywords_5[] = {L"float\0",L"wchar\0",L"false\0",L"break\0",L"class\0",L"using\0",NULL};
-const wchar_t* keywords_6[] = {L"double\0",L"sizeOf\0",L"switch\0",L"return\0",NULL};
+const wchar_t* keywords_5[] = {L"精确浮点型",L"float\0",L"wchar\0",L"false\0",L"break\0",L"class\0",L"using\0",NULL};
+const wchar_t* keywords_6[] = {L"double\0",L"switch\0",L"return\0",NULL};
 const wchar_t* keywords_7[] = {L"default\0",NULL};
 const wchar_t* keywords_8[] = {L"continue\0",NULL};
 bool isKeyword(const wchar_t*);
