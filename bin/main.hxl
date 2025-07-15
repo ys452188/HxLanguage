@@ -1,13 +1,131 @@
 using "io.hxh";
-fun main():int {
+fun main(arg1: float, arg2: int):int {
 	var str:String;
-	var newVar = 0x8A;
+	var newVar:int = 0x8A;
+	str = L"hello";
+	var newVar1:int = 1+2*3;
+	log(newVar1);
+	return 0;
+}
+fun 
+newFunc(
+arg1:wchar, 
+arg2:int, 
+newVar:float)
+:void 
+{
+	newVar 
+	= 
+	0x8A;
+	log
+	(newVar);
+	return;
+}
+
+fun newFunc3():int {
+	var str:String;
+	var newVar:int = 0x8A;
 	str = L"hello";
 	return 0;
 }
-fun newFunc():int {
-	var str:String;
-	var newVar = 0x8A;
-	str = L"hello";
-	return 0;
+fun newFun4():void {
+	log("hello");
+}
+fun newFun5():void {
+	log("This is newFun1");
+}
+fun newFun6():void {
+
+}
+fun newFun7():void {
+
+}
+fun newFun8():void {
+
+}
+fun newFun9():void {
+
+}fun newFun10():void {
+
+}fun newFun11():void {
+
+}fun newFun12():void {
+
+}fun newFun13():void {
+
+}fun newFun14():void {
+
+}fun newFun15():void {
+
+}fun newFun16():void {
+
+}fun newFun17():void {
+
+}fun newFun18():void {
+
+}fun newFun19():void {
+
+}fun newFun20():void {
+
+}fun newFun21():void {
+
+}fun newFun22():void {
+
+}
+fun newFun23():void {
+
+}fun newFun24():void {
+
+}fun newFun25():void {
+
+}fun newFun26():void {
+
+}fun newFun27():void {
+
+}fun newFun28():void {
+
+}fun newFun29():void {
+
+}fun newFun30():void {
+
+}fun newFun31():void {
+
+}fun newFun32():void {
+
+}fun newFun33():void {
+
+}fun newFun34():void {
+
+}fun newFun35():void {
+
+}fun newFun36():void {
+
+}fun newFun37():void {
+
+}fun newFun38():void {
+
+}fun newFun39():void {
+
+}fun newFun40():void {
+
+}fun newFun41():void {
+
+}fun newFun42():void {
+
+}fun newFun43():void {
+
+}fun newFun44():void {
+
+}fun newFun45():void {
+
+}fun newFun46():void {
+
+}fun newFun47():void {
+
+}fun newFun48():void {
+
+}fun newFun49():void {
+
+}fun newFun50():void {
+
 }
