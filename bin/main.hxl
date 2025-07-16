@@ -5,6 +5,11 @@ fun main(arg1: float, arg2: int):int {
 	str = L"hello";
 	var newVar1:int = 1+2*3;
 	log(newVar1);
+	if(1) {
+		if(2 == 2) {
+			log("Ha ha");
+		}
+	}
 	return 0;
 }
 fun 

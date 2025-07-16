@@ -1,4 +1,3 @@
-#define _WIN32
 //用于处理GNU C Library字符转换子系统（iconv）分配的内部缓冲区
 #ifdef __GLIBC__
 #include <gnu/libc-version.h>
@@ -12,13 +11,27 @@ void __libc_freeres(void);
 #include "lexer.h"
 #include "scanner.h"
 #include "compiler.h"
+int hxCompiler(void);
+int main(void);
 int main(void) {
     clock_t start,end;
     start = clock();
+    int err = hxCompiler();
+    end = clock();
+    printf("\33[33m运行结束,历时 %lf s, 返回码为 %d.\n\33[0m",((double)(end-start)/CLOCKS_PER_SEC),err);
+#ifdef __GLIBC__
+    __libc_freeres();
+#endif
+    return err;
+}
+int hxCompiler(void) {
 #ifdef _WIN32
     setlocale(LC_ALL,"zh_CN.UTF-8");
 #endif
-    wchar_t* src = getData("main.hxl");
+    printf("\33[32m输入源文件名>>\33[0m");
+    char fname[1024];
+    scanf("%s",fname);
+    wchar_t* src = getData(fname);
     if(src == NULL) {
         return 255;
     }
@@ -35,8 +48,6 @@ int main(void) {
 #endif
         freeSymTable();
         //freeObjectCode(&obj);
-        end = clock();
-        printf("运行结束,历时 %lf s\n",((double)(end-start)/CLOCKS_PER_SEC));
         return -1;
     }
     freeSymTable();
@@ -45,11 +56,6 @@ int main(void) {
     printf("\33[32m编译完成。\33[0m\n");
 #else
     wprintf(L"\33[32m编译完成。\33[0m\n");
-#endif
-    end = clock();
-    printf("运行结束,历时 %lf s\n",((double)(end-start)/CLOCKS_PER_SEC));
-#ifdef __GLIBC__
-    __libc_freeres();
 #endif
     return 0;
 }

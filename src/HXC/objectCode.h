@@ -56,6 +56,7 @@ typedef struct Function {
     wchar_t* ret_type;
     Variable* args;
     int argc;
+    TokenStream body;
 } Function;
 // 对象代码结构
 typedef struct ObjectCode {
@@ -79,11 +80,15 @@ int initSymTable(void);
 int enterVarSym(Variable variable);
 void freeSymTable(void);
 int isDuplicateDefineFunction(const Function* user_func, Function* table,int table_length);
+int initObjectFunction(ObjectCode* oc);
 int initObjectCode(ObjectCode*);
 void freeObjectCode(ObjectCode*);
 int setArgs(Token* p,int* index,Function* func);
 int compile(TokenStream*,ObjectCode*);  //编译
-int initObjectCode(ObjectCode* obj) {
+int initObjectCode(ObjectCode* oc) {
+    int err = initObjectFunction(oc);
+    if(err != 0) return err;
+    return 0;
 }
 void freeObjectCode(ObjectCode* oc) {
     return;
@@ -272,6 +277,22 @@ int enterVarSym(Variable variable) {
         printf("已将变量\"%ls\"加入符号表(地址：%p)\n",checker_symTable.varSymTable.vars[checker_symTable.varSymTable.index].name, &(checker_symTable.varSymTable.vars[checker_symTable.varSymTable.index]));
     }
     checker_symTable.varSymTable.index++;
+    return 0;
+}
+int initObjectFunction(ObjectCode* oc) {
+    if(oc->functions == NULL) {
+        oc->functions = (Function*)calloc(1, sizeof(Function));
+    }
+    if(oc->functions == NULL) {
+#ifndef _WIN32
+        fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+        fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
+        return 255;
+    }
+    oc->function_index = 0;
+    oc->function_size = 1;
     return 0;
 }
 #endif

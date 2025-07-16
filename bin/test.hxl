@@ -1,0 +1,8 @@
+fun main():void {
+	func();
+	return;
+}
+fun func():void {
+	puts("Hello,world!");
+	return;
+}

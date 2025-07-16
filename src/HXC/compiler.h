@@ -46,7 +46,7 @@ int compile(TokenStream* ts,ObjectCode* oc) {
 #ifndef _WIN32
                     fprintf(stderr,"\33[31m[E]内存分配失败！\33[0m\n");
 #else
-                    fprintf(stderr,"\33[31m[E]内存分配失败！\33[0m\n");
+                    fwprintf(stderr,L"\33[31m[E]内存分配失败！\33[0m\n");
 #endif
                     return 255;
                 }
@@ -75,7 +75,7 @@ int compile(TokenStream* ts,ObjectCode* oc) {
 #ifndef _WIN32
                         fprintf(stderr,"\33[31m[E]内存分配失败！\33[0m\n");
 #else
-                        fprintf(stderr,"\33[31m[E]内存分配失败！\33[0m\n");
+                        fwprintf(stderr,L"\33[31m[E]内存分配失败！\33[0m\n");
 #endif
                         hxFree(&(newFunc.name));
                         for(int i = 0; i < newFunc.argc; i++) {
@@ -94,7 +94,7 @@ int compile(TokenStream* ts,ObjectCode* oc) {
 #ifndef _WIN32
                     fprintf(stderr,"\33[31m[E]括号后应为冒号\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
 #else
-                    fprintf(stderr,"\33[31m[E]括号后应为冒号\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+                    fwprintf(stderr,L"\33[31m[E]括号后应为冒号\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
 #endif
                     hxFree(&(newFunc.name));
                     return 255;
@@ -105,7 +105,7 @@ int compile(TokenStream* ts,ObjectCode* oc) {
 #ifndef _WIN32
                     fprintf(stderr,"\33[31m[E]冒号后应为该函数的返回类型(关键字或标识符)\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
 #else
-                    fprintf(stderr,"\33[31m[E]冒号后应为该函数的返回类型(关键字或标识符)\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+                    fwprintf(stderr,L"\33[31m[E]冒号后应为该函数的返回类型(关键字或标识符)\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
 #endif
                     hxFree(&(newFunc.name));
                     return 255;
@@ -120,7 +120,7 @@ int compile(TokenStream* ts,ObjectCode* oc) {
 #ifndef _WIN32
                         fprintf(stderr,"\33[31m[E]内存分配失败！\33[0m\n");
 #else
-                        fprintf(stderr,"\33[31m[E]内存分配失败！\33[0m\n");
+                        fwprintf(stderr,L"\33[31m[E]内存分配失败！\33[0m\n");
 #endif
                         hxFree(&(newFunc.name));
                         return 255;
@@ -128,6 +128,72 @@ int compile(TokenStream* ts,ObjectCode* oc) {
                     wcscpy(newFunc.ret_type,ts->tokens[index].value);
                     printf("\33[33m返回类型：%ls\t地址：%p\n\33[0m",newFunc.ret_type,newFunc.ret_type);
                 }
+                index++;
+                if(wcscmp(ts->tokens[index].value, L"{") != 0) {
+#ifndef _WIN32
+                    fprintf(stderr,"\33[31m[E]函数名后应为花括号\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#else
+                    fwprintf(stderr,L"\33[31m[E]函数名后应为花括号\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#endif
+                    hxFree(&(newFunc.name));
+                    if(newFunc.args) {
+                        for(int i = 0; i < newFunc.argc; i++) {
+                            hxFree(&(newFunc.args[i].name));
+                            hxFree(&(newFunc.args[i].type));
+                        }
+                        free(newFunc.args);
+                    }
+                    return 255;
+                }
+                int open = 1;
+                int close = 0;
+                for(index++; index < ts->size; index++) {
+                    if(wcscmp(ts->tokens[index].value, L"{") == 0) {
+                        open++;
+                    }
+                    if(wcscmp(ts->tokens[index].value, L"}") == 0) {
+                        close++;
+                    }
+                    if(wcscmp(ts->tokens[index].value, L"fun") == 0 || wcscmp(ts->tokens[index].value, L"定义函数") == 0) {
+#ifndef _WIN32
+                        fprintf(stderr, "\33[31m[E]函数体内不允许定义函数！(位于 %d 行, %d 列)\33[0m\n", ts->tokens[index].lin, ts->tokens[index].col);
+#else
+                        fwprintf(stderr, L"\33[31m[E]函数体内不允许定义函数！(位于 %d 行, %d 列)\33[0m\n", ts->tokens[index].lin, ts->tokens[index].col);
+#endif
+                        hxFree(&(newFunc.name));
+                        hxFree(&(newFunc.ret_type));
+                        if(newFunc.args) {
+                            for(int i = 0; i < newFunc.argc; i++) {
+                                hxFree(&(newFunc.args[i].name));
+                                hxFree(&(newFunc.args[i].type));
+                            }
+                            free(newFunc.args);
+                        }
+                        return 255;
+                    }
+
+                    if(open == close) {
+                        break;
+                    }
+                }
+                if(open != close) {
+#ifndef _WIN32
+                    fprintf(stderr,"\33[31m[E]花括号未正确关闭！\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#else
+                    fwprintf(stderr,L"\33[31m[E]花括号未正确关闭！\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#endif
+                    hxFree(&(newFunc.name));
+                    hxFree(&(newFunc.ret_type));
+                    if(newFunc.args) {
+                        for(int i = 0; i < newFunc.argc; i++) {
+                            hxFree(&(newFunc.args[i].name));
+                            hxFree(&(newFunc.args[i].type));
+                        }
+                        free(newFunc.args);
+                    }
+                    return 255;
+                }
+                //存储函数体
 
                 hxFree(&(newFunc.name));
                 hxFree(&(newFunc.ret_type));
