@@ -5,17 +5,6 @@
 #include <stdio.h>
 #include <locale.h>
 #include "lexer.h"
-// 释放指针ptr指向的内存空间
-void hxFree(void** ptr) {
-    // 如果ptr为空，则直接返回
-    if(*ptr == NULL) return;
-    //调试输出
-    printf("freeing %p\n",*ptr);
-    // 释放ptr指向的内存空间
-    free(*ptr);
-    *ptr = NULL;
-    return;
-}
 typedef enum {
     TOK_ADD,    //加
     TOK_MIN,    //减
@@ -81,6 +70,20 @@ int enterVarSym(Variable variable);
 void freeSymTable(void);
 int isDuplicateDefineFunction(const Function* user_func, Function* table,int table_length);
 int initObjectFunction(ObjectCode* oc);
+void freeFunction(Function* func) {
+    if(func == NULL) return;
+    hxFree(&(func->name));
+    hxFree(&(func->ret_type));
+    if(func->args) {
+        for(int i = 0; i < func->argc; i++) {
+            hxFree(&(func->args[i].name));
+            hxFree(&(func->args[i].type));
+        }
+        free(func->args);
+    }
+    cleanupToken(&(func->body));
+    return;
+}
 int initObjectCode(ObjectCode*);
 void freeObjectCode(ObjectCode*);
 int setArgs(Token* p,int* index,Function* func);
@@ -91,6 +94,12 @@ int initObjectCode(ObjectCode* oc) {
     return 0;
 }
 void freeObjectCode(ObjectCode* oc) {
+    if((oc->functions)!=NULL) {
+        for(int i = 0; i < oc->function_size; i++) {
+            freeFunction(&(oc->functions[i]));
+        }
+        hxFree(&(oc->functions));
+    }
     return;
 }
 int setArgs(Token* p,int* index,Function* func) {

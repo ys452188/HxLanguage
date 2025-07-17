@@ -145,6 +145,7 @@ int compile(TokenStream* ts,ObjectCode* oc) {
                     }
                     return 255;
                 }
+                int bodyStartIndex = index+1;
                 int open = 1;
                 int close = 0;
                 for(index++; index < ts->size; index++) {
@@ -193,8 +194,59 @@ int compile(TokenStream* ts,ObjectCode* oc) {
                     }
                     return 255;
                 }
+                int bodyEndIndex = index -1;
                 //存储函数体
-
+                if(bodyStartIndex == bodyEndIndex) {
+                    newFunc.body.tokens = NULL;
+                } else {
+                    int tokenCount = bodyEndIndex - bodyStartIndex + 1;
+                    newFunc.body.tokens = (Token*)calloc(tokenCount, sizeof(Token));
+                    newFunc.body.size = tokenCount;
+                    if(!(newFunc.body.tokens)) {
+#ifndef _WIN32
+                        fprintf(stderr,"\33[31m[E]内存分配失败！\33[0m\n");
+#else
+                        fwprintf(stderr,L"\33[31m[E]内存分配失败！\33[0m\n");
+#endif
+                        hxFree(&(newFunc.name));
+                        hxFree(&(newFunc.ret_type));
+                        if(newFunc.args) {
+                            for(int i = 0; i < newFunc.argc; i++) {
+                                hxFree(&(newFunc.args[i].name));
+                                hxFree(&(newFunc.args[i].type));
+                            }
+                            free(newFunc.args);
+                        }
+                        return 255;
+                    }
+                    for(int i = 0; i < newFunc.body.size; i++) {
+                        int srcIndex = bodyStartIndex + i;
+                        newFunc.body.tokens[i].value = (wchar_t*)calloc(wcslen(ts->tokens[srcIndex].value)+1, sizeof(wchar_t));
+                        if(!(newFunc.body.tokens[i].value)) {
+#ifndef _WIN32
+                            fprintf(stderr,"\33[31m[E]内存分配失败！\33[0m\n");
+#else
+                            fwprintf(stderr,L"\33[31m[E]内存分配失败！\33[0m\n");
+#endif
+                            hxFree(&(newFunc.name));
+                            hxFree(&(newFunc.ret_type));
+                            if(newFunc.args) {
+                                for(int i = 0; i < newFunc.argc; i++) {
+                                    hxFree(&(newFunc.args[i].name));
+                                    hxFree(&(newFunc.args[i].type));
+                                }
+                                free(newFunc.args);
+                            }
+                            cleanupToken(&(newFunc.body));
+                            return 255;
+                        }
+                        wcscpy(newFunc.body.tokens[i].value, ts->tokens[srcIndex].value);
+                        newFunc.body.tokens[i].type = ts->tokens[srcIndex].type;
+                        newFunc.body.tokens[i].length = ts->tokens[srcIndex].length;
+                        newFunc.body.tokens[i].col = ts->tokens[srcIndex].col;
+                        newFunc.body.tokens[i].lin = ts->tokens[srcIndex].lin;
+                    }
+                }
                 hxFree(&(newFunc.name));
                 hxFree(&(newFunc.ret_type));
                 if(newFunc.args) {
@@ -204,6 +256,7 @@ int compile(TokenStream* ts,ObjectCode* oc) {
                     }
                     free(newFunc.args);
                 }
+                cleanupToken(&(newFunc.body));
             }
             break;
         case TOKEN_VALUE:      //字面量

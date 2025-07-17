@@ -47,11 +47,11 @@ int hxCompiler(void) {
         wprintf(L"\33[31m出现错误,编译失败。\33[0m\n");
 #endif
         freeSymTable();
-        //freeObjectCode(&obj);
+        freeObjectCode(&obj);
         return -1;
     }
     freeSymTable();
-    //freeObjectCode(&obj);
+    freeObjectCode(&obj);
 #ifndef _WIN32
     printf("\33[32m编译完成。\33[0m\n");
 #else

@@ -8,6 +8,17 @@
 #include <stdlib.h>
 #include <locale.h>
 #include <wchar.h>
+// 释放指针ptr指向的内存空间
+void hxFree(void** ptr) {
+    // 如果ptr为空，则直接返回
+    if(*ptr == NULL) return;
+    //调试输出
+    printf("freeing %p\n",*ptr);
+    // 释放ptr指向的内存空间
+    free(*ptr);
+    *ptr = NULL;
+    return;
+}
 wchar_t* charToWchar(const char* narrow_str) {
     setlocale(LC_ALL, ""); // 使用系统默认locale
     size_t required_size = mbstowcs(NULL, narrow_str, 0) + 1;
@@ -361,7 +372,7 @@ void cleanupToken(TokenStream* ts) {
 
             //printf("Token%d {\n\tvalue= %ls\n\ttype=%d\n}\n",i,ts->tokens[i].value,ts->tokens[i].type);
 
-            free(ts->tokens[i].value);
+            hxFree(&(ts->tokens[i].value));
             ts->tokens[i].value = NULL; // 避免悬空指针
         }
     }
