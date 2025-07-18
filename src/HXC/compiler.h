@@ -13,14 +13,14 @@ int compile(TokenStream* ts,ObjectCode* oc) {
     if(ts->tokens==NULL) {
         return 255;
     }
-    if(initSymTable()) {
-#ifndef _WIN32
+    /*if(initSymTable()) {
+    #ifndef _WIN32
         fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
-#else
+    #else
         fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
-#endif
+    #endif
         return 255;
-    }
+    }*/
     for(long int index = 0; index < ts->size; index++) {
 
         //printf("%ls\n",ts->tokens[index].value);

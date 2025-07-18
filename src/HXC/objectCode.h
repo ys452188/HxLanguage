@@ -22,7 +22,6 @@ typedef enum {
     TOK_VAR,    //定义变量
     TOK_CON,    //定义常量
 } Opr;
-// 对象令牌 - 更安全的联合设计
 typedef struct ObjectToken {
     TokenType type;
     union {
@@ -39,6 +38,11 @@ typedef struct Constant {
     wchar_t* name;
     wchar_t* type;
 } Constant;
+//语句
+typedef struct Sentence {
+    ObjectToken* tokens;
+    int length;
+} Sentence;
 // 函数
 typedef struct Function {
     wchar_t* name;            // 函数名
@@ -53,20 +57,23 @@ typedef struct ObjectCode {
     int function_index;       //  索引
     int function_size;
 } ObjectCode;
+typedef struct VarSymTable {
+    wchar_t* area;    //作用域,NULL表示全局
+    Variable* vars;
+    int size;
+    int index;
+} VarSymTable;
+typedef struct ConSymTable {
+    wchar_t* area;    //作用域,NULL表示全局
+    Constant* cons;
+    int size;
+    int index;
+} ConSymTable;
 struct {
-    struct {
-        Variable* vars;
-        int size;
-        int index;
-    } varSymTable;
-    struct {
-        Constant* cons;
-        int size;
-        int index;
-    } conSymTable;
+    VarSymTable* varSymTable;
+    ConSymTable* conSymTable;
 } checker_symTable;
 int initSymTable(void);
-int enterVarSym(Variable variable);
 void freeSymTable(void);
 int isDuplicateDefineFunction(const Function* user_func, Function* table,int table_length);
 int initObjectFunction(ObjectCode* oc);
@@ -204,88 +211,6 @@ int isDuplicateDefineFunction(const Function* user_func, Function* table,int tab
             continue;
         }
     }
-    return 0;
-}
-int initSymTable(void) {
-    checker_symTable.varSymTable.vars = NULL;
-    checker_symTable.varSymTable.size = 0;
-    checker_symTable.varSymTable.index = 0;
-    checker_symTable.varSymTable.vars = (Variable*)calloc(1,sizeof(Variable));
-    if(!(checker_symTable.varSymTable.vars)) {
-        checker_symTable.conSymTable.cons = NULL;
-        return 255;
-    }
-    checker_symTable.varSymTable.size = 1;
-    checker_symTable.conSymTable.cons = NULL;
-    checker_symTable.conSymTable.size = 0;
-    checker_symTable.conSymTable.index = 0;
-    checker_symTable.conSymTable.cons = (Constant*)calloc(1,sizeof(Constant));
-    if(!(checker_symTable.conSymTable.cons)) {
-        hxFree(&(checker_symTable.varSymTable.vars));
-        return 255;
-    }
-    checker_symTable.conSymTable.size = 1;
-    return 0;
-}
-void freeSymTable(void) {
-    printf("freeing varTable\n");
-    for(int i = 0; i<checker_symTable.varSymTable.size; i++) {
-        hxFree(&(checker_symTable.varSymTable.vars[i].name));
-        if(checker_symTable.varSymTable.vars[i].type) {
-            hxFree(&(checker_symTable.varSymTable.vars[i].type));
-        }
-    }
-    hxFree(&(checker_symTable.varSymTable.vars));
-    printf("freeing conTable\n");
-    for(int i = 0; i<checker_symTable.conSymTable.size; i++) {
-        hxFree(&(checker_symTable.conSymTable.cons[i].name));
-        if(checker_symTable.conSymTable.cons[i].type) {
-            hxFree(&(checker_symTable.conSymTable.cons[i].type));
-        }
-    }
-    hxFree(&(checker_symTable.conSymTable.cons));
-    return;
-}
-int enterVarSym(Variable variable) {
-    if(checker_symTable.varSymTable.index >= checker_symTable.varSymTable.size) {
-        void* temp = realloc(checker_symTable.varSymTable.vars,checker_symTable.varSymTable.size+1);
-        if(!(temp)) {
-#ifndef _WIN32
-            fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
-#else
-            fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
-#endif
-            return 255;
-        }
-        checker_symTable.varSymTable.vars = temp;
-        checker_symTable.varSymTable.size += 1;
-    }
-    checker_symTable.varSymTable.vars[checker_symTable.varSymTable.index].name = (wchar_t*)calloc(wcslen(variable.name)+1,sizeof(wchar_t));
-    if(!(checker_symTable.varSymTable.vars[checker_symTable.varSymTable.index].name)) {
-#ifndef _WIN32
-        fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
-#else
-        fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
-#endif
-        return 255;
-    }
-    wcscpy(checker_symTable.varSymTable.vars[checker_symTable.varSymTable.index].name, variable.name);
-    if(variable.type == NULL) {
-        checker_symTable.varSymTable.vars[checker_symTable.varSymTable.index].type = NULL;
-    } else {
-        checker_symTable.varSymTable.vars[checker_symTable.varSymTable.index].type = (wchar_t*)calloc(wcslen(variable.type)+1,sizeof(wchar_t));
-        if(!(checker_symTable.varSymTable.vars[checker_symTable.varSymTable.index].type)) {
-#ifndef _WIN32
-            fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
-#else
-            fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
-#endif
-            return 255;
-        }
-        wcscpy(checker_symTable.varSymTable.vars[checker_symTable.varSymTable.index].type, variable.type);
-        printf("已将变量\"%ls\"加入符号表(地址：%p)\n",checker_symTable.varSymTable.vars[checker_symTable.varSymTable.index].name, &(checker_symTable.varSymTable.vars[checker_symTable.varSymTable.index]));
-    }
-    checker_symTable.varSymTable.index++;
     return 0;
 }
 int initObjectFunction(ObjectCode* oc) {
