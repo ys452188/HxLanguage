@@ -144,13 +144,13 @@ TokenStream getToken(const wchar_t* src) {
             index++;
             continue;
         } else if((*p == L'L') && (*(p+1) == L'\"'||*(p+1)==L'“' ||*(p+1)==L'”')) {    //宽字符串
-            const wchar_t start_quote = *(p+1); // 记录开始引号类型
+            //const wchar_t start_quote = *(p+1); // 记录开始引号类型
             const wchar_t* p_end = p+2; // 跳过 L 和引号
 
             // 查找结束引号
             int escape = 0;
             while(*p_end != L'\0') {
-                if(!escape && *p_end == start_quote) {
+                if(!escape &&( *p_end == L'\"' || *p_end == L'“' || *p_end == L'”')) {
                     break; // 找到匹配的结束引号
                 }
                 escape = (*p_end == L'\\') ? 1 : 0; // 处理转义字符
@@ -158,7 +158,7 @@ TokenStream getToken(const wchar_t* src) {
             }
 
             // 检查字符串是否正常结束
-            if(*p_end != start_quote) {
+            if(*p_end != L'\"' && *p_end != L'“' && *p_end != L'”') {
 #ifndef _WIN32
                 fprintf(stderr, "\033[31m[E]词法错误：宽字符串没有结尾！(位于第%d行,%d列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
 #else
@@ -187,7 +187,7 @@ TokenStream getToken(const wchar_t* src) {
                     break;
                 }
             }
-            if (*p_end != *p || (p_end > p+1 && *(p_end-1) == L'\\')) {
+            if ((*p_end != L'\"' && *p_end != L'“' && *p_end != L'”') || (p_end > p+1 && *(p_end-1) == L'\\')) {
 #ifndef _WIN32
                 fprintf(stderr, "\033[31m[E]词法错误：字符串没有结尾！(位于第%d行,%d列)\033[0m\n",lexerStatus.lin,lexerStatus.col);
 #else
@@ -369,9 +369,7 @@ void cleanupToken(TokenStream* ts) {
     // 遍历实际生成的Token数量（不是预分配的大小）
     for (int i = 0; i < ts->size; i++) {
         if (ts->tokens[i].value) {
-
-            //printf("Token%d {\n\tvalue= %ls\n\ttype=%d\n}\n",i,ts->tokens[i].value,ts->tokens[i].type);
-
+            //printf("\33[33mToken%d {\n\tvalue= %ls\n\ttype=%d\n}\n",i,ts->tokens[i].value,ts->tokens[i].type);
             hxFree(&(ts->tokens[i].value));
             ts->tokens[i].value = NULL; // 避免悬空指针
         }
