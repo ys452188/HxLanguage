@@ -43,6 +43,12 @@ typedef struct Sentence {
     ObjectToken* tokens;
     int length;
 } Sentence;
+typedef struct SymTable {
+    Constant* cons;
+    Variable* vars;
+    int cons_size;
+    int vars_size;
+} SymTable;
 // 函数
 typedef struct Function {
     wchar_t* name;            // 函数名
@@ -50,40 +56,81 @@ typedef struct Function {
     Variable* args;
     int argc;
     TokenStream body;
+    SymTable symTable;
 } Function;
+typedef struct ObjectFunction {
+    wchar_t* name;            // 函数名
+    wchar_t* ret_type;
+    Variable* args;
+    int argc;
+    Sentence* sentences;
+    int sentence_size;
+} ObjectFunction;
 // 对象代码结构
 typedef struct ObjectCode {
-    Function* functions;      // 函数数组
-    int function_index;       //  索引
+    ObjectFunction* functions;      // 函数
+    int function_index;             //  索引
     int function_size;
 } ObjectCode;
-typedef struct VarSymTable {
-    wchar_t* area;    //作用域,NULL表示全局
-    Variable* vars;
-    int size;
-    int index;
-} VarSymTable;
-typedef struct ConSymTable {
-    wchar_t* area;    //作用域,NULL表示全局
-    Constant* cons;
-    int size;
-    int index;
-} ConSymTable;
 struct {
-    VarSymTable* varSymTable;
-    int varSymTable_size;
-    ConSymTable* conSymTable;
-    int conSymTable_size;
+    Function* functions;
+    int function_size;
+    int function_index;
 } checker_symTable;
 int initSymTable(void);
 void freeSymTable(void);
 int isDuplicateDefineFunction(const Function* user_func, Function* table,int table_length);
 void freeFunction(Function* func);
 int initObjectFunction(ObjectCode* oc);
+void freeObjectFunction(ObjectFunction* func);
 int initObjectCode(ObjectCode*);
 void freeObjectCode(ObjectCode*);
 int setArgs(Token* p,int* index,Function* func);
 int compile(TokenStream*,ObjectCode*);  //编译
+int initSymTable(void) {
+    checker_symTable.functions = NULL;
+    checker_symTable.function_size = 1;
+    checker_symTable.functions = (Function*)calloc(checker_symTable.function_size,sizeof(Function));
+    if(!(checker_symTable.functions)) {
+#ifndef _WIN32
+        fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
+#else
+        fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
+#endif
+        return 255;
+    }
+    checker_symTable.function_index = 0;
+    return 0;
+}
+void freeSymTable(void) {
+    if(checker_symTable.functions != NULL) {
+        for(int i = 0; i < checker_symTable.function_size; i++) {
+            freeFunction(&(checker_symTable.functions[i]));
+        }
+        hxFree(&(checker_symTable.functions));
+    }
+    return;
+}
+void freeObjectFunction(ObjectFunction* func) {
+    hxFree(&(func->name));
+    hxFree(&(func->ret_type));
+    if((func->args)!=NULL) {
+        for(int i = 0; i < func->argc; i++) {
+            hxFree(&(func->args[i].name));
+            hxFree(&(func->args[i].type));
+        }
+        hxFree(&(func->args));
+    }
+    if((func->sentences)!=NULL) {
+        for(int i = 0; i < func->sentence_size; i++) {
+            for(int j = 0; j < func->sentences[i].length; j++) {
+                if(func->sentences[i].tokens[j].owns_memory) hxFree(&(func->sentences[i].tokens[j].value.val));
+            }
+            hxFree(&(func->sentences[i].tokens));
+        }
+        hxFree(&(func->sentences));
+    }
+}
 int initObjectCode(ObjectCode* oc) {
     int err = initObjectFunction(oc);
     if(err != 0) return err;
@@ -92,7 +139,7 @@ int initObjectCode(ObjectCode* oc) {
 void freeObjectCode(ObjectCode* oc) {
     if((oc->functions)!=NULL) {
         for(int i = 0; i < oc->function_size; i++) {
-            freeFunction(&(oc->functions[i]));
+            freeObjectFunction(&(oc->functions[i]));
         }
         hxFree(&(oc->functions));
     }
@@ -204,7 +251,7 @@ int isDuplicateDefineFunction(const Function* user_func, Function* table,int tab
 }
 int initObjectFunction(ObjectCode* oc) {
     if(oc->functions == NULL) {
-        oc->functions = (Function*)calloc(1, sizeof(Function));
+        oc->functions = (ObjectFunction*)calloc(1, sizeof(ObjectFunction));
     }
     if(oc->functions == NULL) {
 #ifndef _WIN32
@@ -230,6 +277,20 @@ void freeFunction(Function* func) {
         free(func->args);
     }
     cleanupToken(&(func->body));
+    if(func->symTable.cons) {
+        for(int i = 0; i < func->symTable.cons_size; i++) {
+            hxFree(&(func->symTable.cons[i].name));
+            hxFree(&(func->symTable.cons[i].type));
+        }
+        free(func->symTable.cons);
+    }
+    if(func->symTable.vars) {
+        for(int i = 0; i < func->symTable.vars_size; i++) {
+            hxFree(&(func->symTable.vars[i].name));
+            hxFree(&(func->symTable.vars[i].type));
+        }
+        free(func->symTable.vars);
+    }
     return;
 }
 #endif

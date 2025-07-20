@@ -10,17 +10,17 @@ int compile(TokenStream* ts,ObjectCode* oc) {
 #ifdef _WIN32
     setlocale(LC_ALL,"zh_CN.UTF-8");
 #endif
-    if(ts->tokens==NULL) {
-        return 255;
-    }
-    /*if(initSymTable()) {
+    if(initSymTable()) {
     #ifndef _WIN32
         fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
     #else
         fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
     #endif
         return 255;
-    }*/
+    }
+    if(ts->tokens==NULL) {
+        return 255;
+    }
     for(long int index = 0; index < ts->size; index++) {
 
         //printf("%ls\n",ts->tokens[index].value);
@@ -113,7 +113,7 @@ int compile(TokenStream* ts,ObjectCode* oc) {
                 //printf("%ls\n",ts->tokens[index].value);
                 if(wcscmp(ts->tokens[index].value, L"void") == 0) {
                     newFunc.ret_type = NULL;
-                    printf("\33[33m返回类型：void\t地址：%p\n\33[0m",newFunc.ret_type);
+                    printf("\33[33m返回类型：void\t地址：%p\n\33[0m",(void*)(newFunc.ret_type));
                 } else {
                     newFunc.ret_type = (wchar_t*)calloc(wcslen(ts->tokens[index].value)+1, sizeof(wchar_t));
                     if(!newFunc.ret_type) {

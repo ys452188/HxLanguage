@@ -22,6 +22,9 @@ int main(void) {
 #ifdef __GLIBC__
     __libc_freeres();
 #endif
+#ifdef _WIN32
+    system("pause");
+#endif
     return err;
 }
 int hxCompiler(void) {
@@ -38,6 +41,7 @@ int hxCompiler(void) {
     TokenStream t = getToken(src);
     free(src);
     ObjectCode obj = {0};
+    initObjectCode(&obj);
     int err = compile(&t,&obj);
     cleanupToken(&t);
     if(err) {
@@ -46,11 +50,11 @@ int hxCompiler(void) {
 #else
         wprintf(L"\33[31m出现错误,编译失败。\33[0m\n");
 #endif
-        //freeSymTable();
+        freeSymTable();
         freeObjectCode(&obj);
         return -1;
     }
-    //freeSymTable();
+    freeSymTable();
     freeObjectCode(&obj);
 #ifndef _WIN32
     printf("\33[32m编译完成。\33[0m\n");

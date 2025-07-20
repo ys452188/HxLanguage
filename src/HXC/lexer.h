@@ -13,7 +13,7 @@ void hxFree(void** ptr) {
     // 如果ptr为空，则直接返回
     if(*ptr == NULL) return;
     //调试输出
-    printf("freeing %p\n",*ptr);
+    //printf("freeing %p\n",*ptr);
     // 释放ptr指向的内存空间
     free(*ptr);
     *ptr = NULL;
