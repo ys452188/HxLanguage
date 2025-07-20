@@ -71,26 +71,15 @@ typedef struct ConSymTable {
 } ConSymTable;
 struct {
     VarSymTable* varSymTable;
+    int varSymTable_size;
     ConSymTable* conSymTable;
+    int conSymTable_size;
 } checker_symTable;
 int initSymTable(void);
 void freeSymTable(void);
 int isDuplicateDefineFunction(const Function* user_func, Function* table,int table_length);
+void freeFunction(Function* func);
 int initObjectFunction(ObjectCode* oc);
-void freeFunction(Function* func) {
-    if(func == NULL) return;
-    hxFree(&(func->name));
-    hxFree(&(func->ret_type));
-    if(func->args) {
-        for(int i = 0; i < func->argc; i++) {
-            hxFree(&(func->args[i].name));
-            hxFree(&(func->args[i].type));
-        }
-        free(func->args);
-    }
-    cleanupToken(&(func->body));
-    return;
-}
 int initObjectCode(ObjectCode*);
 void freeObjectCode(ObjectCode*);
 int setArgs(Token* p,int* index,Function* func);
@@ -228,5 +217,19 @@ int initObjectFunction(ObjectCode* oc) {
     oc->function_index = 0;
     oc->function_size = 1;
     return 0;
+}
+void freeFunction(Function* func) {
+    if(func == NULL) return;
+    hxFree(&(func->name));
+    hxFree(&(func->ret_type));
+    if(func->args) {
+        for(int i = 0; i < func->argc; i++) {
+            hxFree(&(func->args[i].name));
+            hxFree(&(func->args[i].type));
+        }
+        free(func->args);
+    }
+    cleanupToken(&(func->body));
+    return;
 }
 #endif
