@@ -11,16 +11,17 @@ int compile(TokenStream* ts,ObjectCode* oc) {
     setlocale(LC_ALL,"zh_CN.UTF-8");
 #endif
     if(initSymTable()) {
-    #ifndef _WIN32
+#ifndef _WIN32
         fprintf(stderr,"\033[31m[E]内存分配失败！\033[0m\n");
-    #else
+#else
         fwprintf(stderr,L"\033[31m[E]内存分配失败！\033[0m\n");
-    #endif
+#endif
         return 255;
     }
     if(ts->tokens==NULL) {
         return 255;
     }
+    int variableIndex;         //数据段索引
     for(long int index = 0; index < ts->size; index++) {
 
         //printf("%ls\n",ts->tokens[index].value);
@@ -257,6 +258,43 @@ int compile(TokenStream* ts,ObjectCode* oc) {
                     free(newFunc.args);
                 }
                 cleanupToken(&(newFunc.body));
+            }
+            //var关键字
+            //前面的fun关键字处理已跳过函数体,因此这里的var是定义全局变量
+            if(wcscmp(ts->tokens[index].value,L"var") == 0 || wcscmp(ts->tokens[index].value,L"定义变量") == 0) {
+                index++;
+                if(ts->tokens[index].type != TOKEN_INDENTIFIER) {
+#ifndef _WIN32
+                    fprintf(stderr,"\33[31m[E]定义变量时,关键字\"var\"或\"定义变量\"后应为变量名(标识符)！\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#else
+                    fwprintf(stderr,L"\33[31m[E]定义变量时,关键字\"var\"或\"定义变量\"后应为变量名(标识符)！\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#endif
+                    return 255;
+                }
+                printf("\33[33m全局变量名：%ls\n\33[0m",ts->tokens[index].value);
+                index++;
+                if((wcscmp(ts->tokens[index].value,L":") != 0) && (wcscmp(ts->tokens[index].value,L"：") != 0)) {
+#ifndef _WIN32
+                    fprintf(stderr,"\33[31m[E]定义变量时,变量名后应为冒号！\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#else
+                    fwprintf(stderr,L"\33[31m[E]定义变量时,变量名后应为冒号！\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#endif
+                    return 255;
+                }
+                index++;
+                if((ts->tokens[index].type != TOKEN_INDENTIFIER) && (ts->tokens[index].type != TOKEN_KEYWORD)) {
+#ifndef _WIN32
+                    fprintf(stderr,"\33[31m[E]定义变量时,变量名后的冒号后应为该变量的类型名(标识符 或 关键字)！\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#else
+                    fwprintf(stderr,L"\33[31m[E]定义变量时,变量名后的冒号后应为该变量的类型名(标识符 或 关键字)！\n(位于 %d 行, %d 列)\33[0m\n",ts->tokens[index].lin,ts->tokens[index].col);
+#endif
+                    return 255;
+                }
+                printf("\33[33m全局变量的类型：%ls\n\33[0m",ts->tokens[index].value);
+                index++;
+                if(wcscmp(ts->tokens[index].value,L";") == 0 || wcscmp(ts->tokens[index].value,L"；") == 0) {
+                    break;
+                }
             }
             break;
         case TOKEN_VALUE:      //字面量

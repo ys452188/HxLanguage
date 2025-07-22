@@ -1,3 +1,4 @@
+// v1.14
 //用于处理GNU C Library字符转换子系统（iconv）分配的内部缓冲区
 #ifdef __GLIBC__
 #include <gnu/libc-version.h>
@@ -10,6 +11,7 @@ void __libc_freeres(void);
 #include <time.h>
 #include "lexer.h"
 #include "scanner.h"
+#include "objectCode.h"
 #include "compiler.h"
 int hxCompiler(void);
 int main(void);
@@ -55,6 +57,8 @@ int hxCompiler(void) {
         return -1;
     }
     freeSymTable();
+    //printf("%u\n",obj.header.magicNumber);
+    //printf("%f\n",obj.header.version);
     freeObjectCode(&obj);
 #ifndef _WIN32
     printf("\33[32m编译完成。\33[0m\n");

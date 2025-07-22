@@ -4,79 +4,10 @@
 #include <wchar.h>
 #include <stdio.h>
 #include <locale.h>
+#include <stdbool.h>
 #include "lexer.h"
-typedef enum {
-    TOK_ADD,    //加
-    TOK_MIN,    //减
-    TOK_EQU,    //等
-    TOK_DIV,    //除
-    TOK_MUL,    //乘
-    TOK_GRE,    //大于
-    TOK_LES,    //小于
-    TOK_LOE,    //小于或等于
-    TOK_GOE,    //大于或等于
-    TOK_SEI,    //自增
-    TOK_SER,    //自减
-    TOK_ASG,    //赋值
-    TOK_CAL,    //调用
-    TOK_VAR,    //定义变量
-    TOK_CON,    //定义常量
-} Opr;
-typedef struct ObjectToken {
-    TokenType type;
-    union {
-        wchar_t* val;         // 值类型使用
-        Opr opr;              // 操作符类型（使用枚举值）
-    } value;
-    bool owns_memory;         // 标记是否需要释放val的内存
-} ObjectToken;
-typedef struct Variable {
-    wchar_t* name;
-    wchar_t* type;
-} Variable;
-typedef struct Constant {
-    wchar_t* name;
-    wchar_t* type;
-} Constant;
-//语句
-typedef struct Sentence {
-    ObjectToken* tokens;
-    int length;
-} Sentence;
-typedef struct SymTable {
-    Constant* cons;
-    Variable* vars;
-    int cons_size;
-    int vars_size;
-} SymTable;
-// 函数
-typedef struct Function {
-    wchar_t* name;            // 函数名
-    wchar_t* ret_type;
-    Variable* args;
-    int argc;
-    TokenStream body;
-    SymTable symTable;
-} Function;
-typedef struct ObjectFunction {
-    wchar_t* name;            // 函数名
-    wchar_t* ret_type;
-    Variable* args;
-    int argc;
-    Sentence* sentences;
-    int sentence_size;
-} ObjectFunction;
-// 对象代码结构
-typedef struct ObjectCode {
-    ObjectFunction* functions;      // 函数
-    int function_index;             //  索引
-    int function_size;
-} ObjectCode;
-struct {
-    Function* functions;
-    int function_size;
-    int function_index;
-} checker_symTable;
+#include "objectCodeStruct.h"
+/****************************/
 int initSymTable(void);
 void freeSymTable(void);
 int isDuplicateDefineFunction(const Function* user_func, Function* table,int table_length);
@@ -87,6 +18,7 @@ int initObjectCode(ObjectCode*);
 void freeObjectCode(ObjectCode*);
 int setArgs(Token* p,int* index,Function* func);
 int compile(TokenStream*,ObjectCode*);  //编译
+/****************************/
 int initSymTable(void) {
     checker_symTable.functions = NULL;
     checker_symTable.function_size = 1;
@@ -132,6 +64,8 @@ void freeObjectFunction(ObjectFunction* func) {
     }
 }
 int initObjectCode(ObjectCode* oc) {
+    oc->header.magicNumber = 0x8;
+    oc->header.version = 1.14f;
     int err = initObjectFunction(oc);
     if(err != 0) return err;
     return 0;
@@ -277,15 +211,8 @@ void freeFunction(Function* func) {
         free(func->args);
     }
     cleanupToken(&(func->body));
-    if(func->symTable.cons) {
-        for(int i = 0; i < func->symTable.cons_size; i++) {
-            hxFree(&(func->symTable.cons[i].name));
-            hxFree(&(func->symTable.cons[i].type));
-        }
-        free(func->symTable.cons);
-    }
     if(func->symTable.vars) {
-        for(int i = 0; i < func->symTable.vars_size; i++) {
+        for(int i = 0; i < func->symTable.size; i++) {
             hxFree(&(func->symTable.vars[i].name));
             hxFree(&(func->symTable.vars[i].type));
         }
