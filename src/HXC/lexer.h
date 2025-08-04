@@ -29,7 +29,11 @@ typedef struct Token {
     int lin;
 } Token;
 
-wchar_t* keyword[] = {L"var",L"定义变量",L"con",L"定义常量",L"fun",L"定义函数",L"if", L"如果",L"else",L"否则",L"void",L"无参数",L"无返回值",L"pub",L"公有成员",L"pri",L"私有成员",L"pro",L"受保护成员",L"using",L"使用头文件",L"它的父类是",L"parent",NULL};
+wchar_t* keyword[] = {L"var",L"定义变量",L"con",L"定义常量",L"fun",
+                      L"定义函数",L"if", L"如果",L"else",L"否则",L"void",L"无参数",
+                      L"无返回值",L"pub",L"公有成员",L"pri",L"私有成员",L"pro",L"受保护成员",
+                      L"using",L"使用头文件",L"它的父类是",L"parent",L"定义类",L"class",NULL
+                     };
 wchar* src = NULL;     //源代码
 Token* tokens = NULL;
 int tokenSize = 0;
@@ -67,6 +71,8 @@ int setTokens(void) {
             void* temp = realloc(tokens, tokenSize*sizeof(Token));
             if(!temp) return -1;
             tokens = (Token*)temp;
+            tokens[tokenIndex].value = NULL;
+            tokens[tokenIndex].lin = lin;
         }
         if(*p == L'#') {   //处理注释
             while(*p != L'\0') {
