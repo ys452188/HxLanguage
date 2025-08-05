@@ -4,6 +4,7 @@
 #include "lexer.h"
 #include "scanner.h"
 #include "theFirstPass.h"
+#include "compiler.h"
 /*C语言好习惯：
 *变量初始化
 *分配的堆内存要释放
@@ -12,6 +13,9 @@
 int main(int argc, char** argv) {
     initLocale();
     wchar* data = getData("test.hxl");
+    if(data == NULL) {
+        exit(EXIT_FAILURE);
+    }
     setSrc(data);
     free(data);
     data = NULL;
@@ -39,6 +43,7 @@ int main(int argc, char** argv) {
         freeCheckerOutput();
         exit(EXIT_FAILURE);
     }
+    
     freeCheckerOutput();
     fwprintf(stdout,L"\33[32m[I]编译成功！\33[0m\n");
     return 0;
