@@ -42,10 +42,11 @@ Token* tokensPtr = NULL;   //指向tokens的指针
 int lin = 1;     //行
 
 int getNextToken(void) {
-    if(getNextToken_index >= tokenSize) {
+    if(getNextToken_index >= tokenSize-1) {
         //printf("out");
         return 1;
     }
+    if(tokens[getNextToken_index].value == NULL) return 1;
     tokensPtr = &(tokens[getNextToken_index]);
     getNextToken_index++;
     return 0;

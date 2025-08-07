@@ -31,7 +31,8 @@ typedef enum ErrorType {
     ERR_SYNTAX_WHEN_DEFINE_CLASS,                        //定义类时的语法错误
     ERR_CLASS_BEHIND_PARENT_KEYWORD_MUST_BE_MAOHAO,      //父类关键字后应为冒号
     ERR_CLASS_NO_PARENT_CLASS_NAME,                      //定义派生类时缺父类名
-    ERR_BEHIND_TYPE_MUST_BE_FEN_HAO,                     //类型名后必须为分号
+    ERR_NO_END,                                          //缺少分号结尾
+    ERR_ARR_TYPE,                                        //数组类型错误
 } ErrorType;
 typedef struct CheckerSymbol {
     wchar* name;
@@ -73,7 +74,16 @@ typedef struct CheckerOutput {
     int headfiles_size;
 } CheckerOutput;
 
-CheckerOutput checkerOutput = {0};
+CheckerOutput checkerOutput = {
+    .checker_func = NULL,
+    .func_size = 0,
+    .global_sym = NULL,
+    .global_sym_size = 0,
+    .checker_class = NULL,
+    .checker_class_size = 0,
+    .headfiles = NULL,
+    .headfiles_size = 0
+};
 
 int isFunctionRepeat(CheckerFunction* fun1, CheckerFunction* fun2);
 int initCheckerOutput();
@@ -81,57 +91,72 @@ void freeCheckerOutput();
 void error(ErrorType, int lin);
 int firstPass() {
     initLocale();
-    if(initCheckerOutput())  {
-        return -1;
-    }
     int func_index = 0;
     int global_sym_index = 0;
     int class_index = 0;
     int headfiles_index = 0;
-    while(getNextToken() == 0) {
-        if(wcsequ(tokensPtr->value, L"using") || wcsequ(tokensPtr->value, L"使用头文件")) {
+
+    while(!getNextToken()) {
+        //wprintf(L"%ls\n", tokensPtr->value);
+        if(wcsequ(tokensPtr->value, L"using")|| wcsequ(tokensPtr->value, L"使用头文件")) {
             if(!(checkerOutput.headfiles)) {
                 checkerOutput.headfiles = (wchar**)calloc(1, sizeof(wchar*));
-                headfiles_index = 0;
+                if(!(checkerOutput.headfiles)) return -1;
                 checkerOutput.headfiles_size = 1;
-                checkerOutput.headfiles[headfiles_index] = NULL;
             }
-            if(checkerOutput.headfiles_size <= headfiles_index) {
+
+            if(getNextToken()) {
+                fwprintf(stderr, L"\33[31m[E]“使用头文件”或“using”关键字后应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                return 255;
+            }
+            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                fwprintf(stderr, L"\33[31m[E]“使用头文件”或“using”关键字后应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                return 255;
+            }
+parseNextHeadFile:
+            if(headfiles_index >= checkerOutput.headfiles_size) {
                 checkerOutput.headfiles_size = headfiles_index + 1;
-                void* temp = realloc(checkerOutput.headfiles, (checkerOutput.headfiles_size)*sizeof(wchar*));
+                void* temp = realloc(checkerOutput.headfiles, sizeof(wchar*)*(checkerOutput.headfiles_size));
                 if(!temp) return -1;
                 checkerOutput.headfiles = (wchar**)temp;
                 checkerOutput.headfiles[headfiles_index] = NULL;
             }
             if(getNextToken()) {
-                fwprintf(stderr, L"\33[31m[E]“using”或“使用头文件”后必须是冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                fwprintf(stderr, L"\33[31m[E]缺少头文件名(字符串或宽字符串)！(位于第%d行)\33[0m\n", tokensPtr->lin);
                 return 255;
             }
-            if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
-                fwprintf(stderr, L"\33[31m[E]“using”或“使用头文件”后必须是冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+            if(tokensPtr->type != TOK_VAL) {
+                fwprintf(stderr, L"\33[31m[E]缺少头文件名(字符串或宽字符串)！(位于第%d行)\33[0m\n", tokensPtr->lin);
                 return 255;
             }
-            while(!getNextToken()) {
-                if(tokensPtr->type == TOK_VAL && (tokensPtr->mark == WCS || tokensPtr->mark == CS)) {
-                    checkerOutput.headfiles[headfiles_index] = (wchar*)calloc(wcslen(tokensPtr->value)+1, sizeof(wchar));
-                    if(!(checkerOutput.headfiles[headfiles_index])) return -1;
-                    wcscpy(checkerOutput.headfiles[headfiles_index], tokensPtr->value);
-                    //printf("%ls\n", checkerOutput.headfiles[headfiles_index]);
-                    headfiles_index++;
-                } else if(wcsequ(tokensPtr->value, L";")||wcsequ(tokensPtr->value, L"；")) {
-                    break;
-                } else if(wcsequ(tokensPtr->value, L",")) {
-                    continue;
-                } else {
-                    getNextToken_index--;
-                    break;
-                }
+            if(tokensPtr->mark != CS && tokensPtr->mark != WCS) {
+                fwprintf(stderr, L"\33[31m[E]缺少头文件名(字符串或宽字符串)！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                return 255;
             }
-
-        } else if(wcsequ(tokensPtr->value, L"fun") == 1 || wcsequ(tokensPtr->value, L"定义函数") == 1) {  //定义函数
+            checkerOutput.headfiles[headfiles_index] = (wchar*)calloc(wcslen(tokensPtr->value)+1, sizeof(wchar));
+            if(!(checkerOutput.headfiles[headfiles_index])) return -1;
+            wcscpy(checkerOutput.headfiles[headfiles_index], tokensPtr->value);
+            //wprintf(L"%ls\n", checkerOutput.headfiles[headfiles_index]);
+            headfiles_index++;
+            if(getNextToken()) {
+                error(ERR_NO_END, tokensPtr->lin);
+                return 255;
+            }
+            if(wcsequ(tokensPtr->value, L",")) {
+                goto parseNextHeadFile;
+            } else {
+                continue;
+            }
+        }
+        if(wcsequ(tokensPtr->value, L"fun")|| wcsequ(tokensPtr->value, L"定义函数")) {  //定义函数
             if(getNextToken()) {
                 error(ERR_FUN_NAME_SHOULD_BEHIND_FUN,tokensPtr->lin);
                 return 255;
+            }
+            if(checkerOutput.checker_func == NULL) {
+                checkerOutput.checker_func = (CheckerFunction*)calloc(1, sizeof(CheckerFunction));
+                if(!(checkerOutput.checker_func)) return -1;
+                checkerOutput.func_size = 1;
             }
             if(func_index >= checkerOutput.func_size) {
                 //扩容
@@ -293,9 +318,60 @@ int firstPass() {
             if(wcsequ(tokensPtr->value, L"void") || wcsequ(tokensPtr->value, L"无返回值")) {
                 checkerOutput.checker_func[func_index].ret_type = NULL;
             } else {
-                checkerOutput.checker_func[func_index].ret_type = (wchar*)calloc(wcslen(tokensPtr->value)+1, sizeof(wchar));
-                if(!(checkerOutput.checker_func[func_index].ret_type)) return -1;
-                wcscpy(checkerOutput.checker_func[func_index].ret_type, tokensPtr->value);
+                //分析数组返回类型
+                Token* mainTypeName = tokensPtr;
+                int count = 0;
+                if(getNextToken()) {
+                    error(ERR_FUN_BEHIND_RET_TYPE_SHOULD_BE_HUAKUOHAO, tokensPtr->lin);
+                    return 255;
+                }
+                if(wcsequ(tokensPtr->value, L"{")) {
+                    checkerOutput.checker_func[func_index].ret_type = (wchar*)calloc(wcslen(mainTypeName->value)+1, sizeof(wchar));
+                    if(!(checkerOutput.checker_func[func_index].ret_type)) return -1;
+                    wcscpy(checkerOutput.checker_func[func_index].ret_type, mainTypeName->value);
+                    wprintf(L"返回%ls\n",checkerOutput.checker_func[func_index].ret_type);
+                    goto parseFunBody;
+                }
+                if((!wcsequ(tokensPtr->value, L"["))&&(!wcsequ(tokensPtr->value, L"【"))) {
+                    error(ERR_FUN_BEHIND_RET_TYPE_SHOULD_BE_HUAKUOHAO, tokensPtr->lin);
+                    return 255;
+                }
+parseRetType_arr:
+                if(getNextToken()) {
+                    error(ERR_ARR_TYPE, tokensPtr->lin);
+                    return 255;
+                }
+                if((!wcsequ(tokensPtr->value, L"]"))&&(!wcsequ(tokensPtr->value, L"】"))) {
+                    error(ERR_ARR_TYPE, tokensPtr->lin);
+                    return 255;
+                }
+                count+=2;
+                if(getNextToken()) {
+                    error(ERR_FUN_BEHIND_RET_TYPE_SHOULD_BE_HUAKUOHAO, tokensPtr->lin);
+                    return 255;
+                }
+                if((!wcsequ(tokensPtr->value, L"["))&&(!wcsequ(tokensPtr->value, L"【"))) {
+                    if(wcsequ(tokensPtr->value, L"{")) {
+                        checkerOutput.checker_func[func_index].ret_type = (wchar*)calloc(wcslen(mainTypeName->value)+1+count, sizeof(wchar));
+                        if(!(checkerOutput.checker_func[func_index].ret_type)) return -1;
+                        wcscpy(checkerOutput.checker_func[func_index].ret_type, mainTypeName->value);
+                        for(int i = 0; i < count; i++) {
+                            mainTypeName++;
+                            wcscat(checkerOutput.checker_func[func_index].ret_type, mainTypeName->value);
+                        }
+                        wprintf(L"返回%ls\n",checkerOutput.checker_func[func_index].ret_type);
+                        goto parseFunBody;
+                    }
+                    else {
+                        error(ERR_FUN_BEHIND_RET_TYPE_SHOULD_BE_HUAKUOHAO, tokensPtr->lin);
+                        return 255;
+                    }
+                } else {
+                    goto parseRetType_arr;
+                }
+
+
+
             }
             //分析函数体
             if(getNextToken()) {
@@ -306,11 +382,13 @@ int firstPass() {
                 error(ERR_FUN_BEHIND_RET_TYPE_SHOULD_BE_HUAKUOHAO, tokensPtr->lin);
                 return 255;
             }
-            Token* start = NULL;
+
+parseFunBody:
             if(getNextToken()) {
                 error(ERR_HUAKUOHAO_NOT_CLOSE, tokensPtr->lin);
                 return 255;
             }
+            Token* start = NULL;
             start = tokensPtr;
             int open = 1;
             int close = 0;
@@ -345,6 +423,7 @@ int firstPass() {
                     checkerOutput.checker_func[func_index].body[i].lin = start[i].lin;
                 }
             }
+            //printf("%d\n", func_index);
             func_index++;
         } else if(wcsequ(tokensPtr->value, L"class") || wcsequ(tokensPtr->value, L"定义类")) {
             //分析类名
@@ -379,6 +458,11 @@ int firstPass() {
             if(getNextToken()) {
                 error(ERR_CLASS_BEHIND_NAME_MUST_BE_HUAKUOHAO, tokensPtr->lin);
                 return 255;
+            }
+            if(wcsequ(tokensPtr->value, L",")) {
+                if(getNextToken()) {
+                    error(ERR_SYNTAX_WHEN_DEFINE_CLASS, tokensPtr->lin);
+                }
             }
             if(wcsequ(tokensPtr->value, L"它的父类是") || wcsequ(tokensPtr->value, L"parent")) {   //分析父类
                 if(getNextToken()) {
@@ -1040,7 +1124,7 @@ parseProtectedMember:
                 }
             }
             class_index++;
-        } else if(wcsequ(tokensPtr->value, L"var") || wcsequ(tokensPtr->value, L"定义变量")) {
+        } else if(wcsequ(tokensPtr->value, L"con") || wcsequ(tokensPtr->value, L"定义常量")) {   //con
             if(getNextToken()) {
                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                 return 255;
@@ -1049,6 +1133,11 @@ parseProtectedMember:
                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                 return 255;
             }
+            if(checkerOutput.global_sym == NULL) {
+                checkerOutput.global_sym = (CheckerSymbol*)calloc(1, sizeof(CheckerSymbol));
+                if(!(checkerOutput.global_sym)) return -1;
+                checkerOutput.global_sym_size = 1;
+            }
             if(global_sym_index >= checkerOutput.global_sym_size) {
                 checkerOutput.global_sym_size = global_sym_index + 1;
                 void* temp = realloc(checkerOutput.global_sym, sizeof(CheckerSymbol)*(checkerOutput.global_sym_size));
@@ -1056,8 +1145,9 @@ parseProtectedMember:
                 checkerOutput.global_sym = (CheckerSymbol*)temp;
                 checkerOutput.global_sym[global_sym_index].name = NULL;
                 checkerOutput.global_sym[global_sym_index].type = NULL;
-                checkerOutput.global_sym[global_sym_index].isOnlyRead = false;
+                checkerOutput.global_sym[global_sym_index].isOnlyRead = true;
             }
+            checkerOutput.global_sym[global_sym_index].isOnlyRead = true;
             checkerOutput.global_sym[global_sym_index].name = (wchar*)calloc(wcslen(tokensPtr->value)+1, sizeof(wchar));
             if(!(checkerOutput.global_sym[global_sym_index].name)) return -1;
             wcscpy(checkerOutput.global_sym[global_sym_index].name, tokensPtr->value);
@@ -1083,20 +1173,71 @@ parseProtectedMember:
             wcscpy(checkerOutput.global_sym[global_sym_index].type, tokensPtr->value);
             //printf("%ls\n", checkerOutput.global_sym[global_sym_index].type);
             if(getNextToken()) {
-                error(ERR_BEHIND_TYPE_MUST_BE_FEN_HAO, tokensPtr->lin);
+                error(ERR_NO_END, tokensPtr->lin);
                 return 255;
             }
             if((!wcsequ(tokensPtr->value, L";")) && (!wcsequ(tokensPtr->value, L"；"))) {
-                error(ERR_BEHIND_TYPE_MUST_BE_FEN_HAO, tokensPtr->lin);
+                error(ERR_NO_END, tokensPtr->lin);
                 return 255;
             }
             global_sym_index++;
-        } else {
-            if(tokensPtr&&tokensPtr->value != NULL) {
-                //printf("%ls\n", tokensPtr->value);
-                fwprintf(stderr,L"\33[31m[E]全局域中不允许进行的操作！(位于第%d行)\n\33[0m", tokensPtr->lin);
+        } else if(wcsequ(tokensPtr->value, L"var") || wcsequ(tokensPtr->value, L"定义变量")) {      //var
+            if(getNextToken()) {
+                error(ERR_NO_VAR_NAME, tokensPtr->lin);
                 return 255;
             }
+            if(tokensPtr->type != TOK_ID || tokensPtr->value == NULL) {
+                error(ERR_NO_VAR_NAME, tokensPtr->lin);
+                return 255;
+            }
+            if(checkerOutput.global_sym == NULL) {
+                checkerOutput.global_sym = (CheckerSymbol*)calloc(1, sizeof(CheckerSymbol));
+                if(!(checkerOutput.global_sym)) return -1;
+                checkerOutput.global_sym_size = 1;
+            }
+            if(global_sym_index >= checkerOutput.global_sym_size) {
+                checkerOutput.global_sym_size = global_sym_index + 1;
+                void* temp = realloc(checkerOutput.global_sym, sizeof(CheckerSymbol)*(checkerOutput.global_sym_size));
+                if(!temp) return -1;
+                checkerOutput.global_sym = (CheckerSymbol*)temp;
+                checkerOutput.global_sym[global_sym_index].name = NULL;
+                checkerOutput.global_sym[global_sym_index].type = NULL;
+                checkerOutput.global_sym[global_sym_index].isOnlyRead = false;
+            }
+            checkerOutput.global_sym[global_sym_index].isOnlyRead = false;
+            checkerOutput.global_sym[global_sym_index].name = (wchar*)calloc(wcslen(tokensPtr->value)+1, sizeof(wchar));
+            if(!(checkerOutput.global_sym[global_sym_index].name)) return -1;
+            wcscpy(checkerOutput.global_sym[global_sym_index].name, tokensPtr->value);
+            //printf("%ls\n", checkerOutput.global_sym[global_sym_index].name);
+            if(getNextToken()) {
+                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                return 255;
+            }
+            if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
+                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                return 255;
+            }
+            if(getNextToken()) {
+                error(ERR_BEHIND_MAOHAO_SHOULD_BE_TYPE, tokensPtr->lin);
+                return 255;
+            }
+            if(tokensPtr->type != TOK_ID && tokensPtr->type != TOK_KW) {
+                error(ERR_BEHIND_MAOHAO_SHOULD_BE_TYPE, tokensPtr->lin);
+                return 255;
+            }
+            checkerOutput.global_sym[global_sym_index].type = (wchar*)calloc(wcslen(tokensPtr->value)+1, sizeof(wchar));
+            if(!(checkerOutput.global_sym[global_sym_index].type)) return -1;
+            wcscpy(checkerOutput.global_sym[global_sym_index].type, tokensPtr->value);
+            //printf("%ls\n", checkerOutput.global_sym[global_sym_index].type);
+            if(getNextToken()) {
+                error(ERR_NO_END, tokensPtr->lin);
+                return 255;
+            }
+            if((!wcsequ(tokensPtr->value, L";")) && (!wcsequ(tokensPtr->value, L"；"))) {
+                error(ERR_NO_END, tokensPtr->lin);
+                return 255;
+            }
+            global_sym_index++;
         }
     }
     getNextToken_index = 0;
@@ -1106,6 +1247,7 @@ void freeCheckerOutput() {
     if(checkerOutput.checker_func) {
         for(int i = 0; i < checkerOutput.func_size; i++) {
             if(checkerOutput.checker_func[i].name) {
+                wprintf(L"函数名：%ls\n", checkerOutput.checker_func[i].name);
                 free(checkerOutput.checker_func[i].name);
                 checkerOutput.checker_func[i].name = NULL;
             }
@@ -1120,6 +1262,7 @@ void freeCheckerOutput() {
                         checkerOutput.checker_func[i].args[j].name = NULL;
                     }
                     if(checkerOutput.checker_func[i].args[j].type) {
+                        wprintf(L"%ls\n", checkerOutput.checker_func[i].args[j].type);
                         free(checkerOutput.checker_func[i].args[j].type);
                         checkerOutput.checker_func[i].args[j].type = NULL;
                     }
@@ -1136,12 +1279,14 @@ void freeCheckerOutput() {
                 free(checkerOutput.checker_func[i].body);
             }
         }
+        //printf("%d\n", checkerOutput.func_size);
         free(checkerOutput.checker_func);
         checkerOutput.checker_func = NULL;
     }
     if(checkerOutput.global_sym) {
         for(int i = 0; i < checkerOutput.global_sym_size; i++) {
             if(checkerOutput.global_sym[i].name) {
+                wprintf(L"%ls\n", checkerOutput.global_sym[i].name);
                 free(checkerOutput.global_sym[i].name);
                 checkerOutput.global_sym[i].name = NULL;
             }
@@ -1156,16 +1301,20 @@ void freeCheckerOutput() {
     if(checkerOutput.checker_class) {
         for(int i = 0; i < checkerOutput.checker_class_size; i++) {
             if(checkerOutput.checker_class[i].name) {
+                //wprintf(L"类名：%ls\n", checkerOutput.checker_class[i].name);
                 free(checkerOutput.checker_class[i].name);
                 checkerOutput.checker_class[i].name = NULL;
             }
             if(checkerOutput.checker_class[i].parent_class_name) {
+                //wprintf(L"父类：%ls\n", checkerOutput.checker_class[i].name);
                 free(checkerOutput.checker_class[i].parent_class_name);
                 checkerOutput.checker_class[i].parent_class_name = NULL;
             }
             if(checkerOutput.checker_class[i].pub_sym) {
+                //wprintf(L"公有成员：\n");
                 for(int j = 0; j < checkerOutput.checker_class[i].pub_sym_size; j++) {
                     if(checkerOutput.checker_class[i].pub_sym[j].name) {
+                        //wprintf(L"%ls\n", checkerOutput.checker_class[i].pub_sym[j].name);
                         free(checkerOutput.checker_class[i].pub_sym[j].name);
                         checkerOutput.checker_class[i].pub_sym[j].name = NULL;
                     }
@@ -1215,6 +1364,7 @@ void freeCheckerOutput() {
     if(checkerOutput.headfiles) {
         for(int i = 0; i < checkerOutput.headfiles_size; i++) {
             if(checkerOutput.headfiles[i]) {
+                wprintf(L"%ls\n", checkerOutput.headfiles[i]);
                 free(checkerOutput.headfiles[i]);
             }
         }
@@ -1340,30 +1490,17 @@ void error(ErrorType e, int lin) {
     }
     break;
 
-    case ERR_BEHIND_TYPE_MUST_BE_FEN_HAO: {
-        fwprintf(stderr, L"\33[31m[E]类型名后必须是分号！(位于第%d行)\33[0m\n", lin);
+    case ERR_NO_END: {
+        fwprintf(stderr, L"\33[31m[E]缺少分号结尾！(位于第%d行)\33[0m\n", lin);
     }
+    break;
+
+    case ERR_ARR_TYPE: {
+        fwprintf(stderr, L"\33[31m[E]数组类型拼写错误！(位于第%d行)\33[0m\n", lin);
+    }
+    break;
     }
     return;
-}
-int initCheckerOutput() {
-    if(!(checkerOutput.checker_func)) {
-        checkerOutput.checker_func = (CheckerFunction*)calloc(1, sizeof(CheckerFunction));
-        if(!(checkerOutput.checker_func)) return -1;
-        checkerOutput.func_size = 1;
-    }
-    if(!(checkerOutput.global_sym)) {
-        checkerOutput.global_sym = (CheckerSymbol*)calloc(1, sizeof(CheckerSymbol));
-        if(!(checkerOutput.global_sym)) return -1;
-        checkerOutput.global_sym_size = 1;
-    }
-    if(!(checkerOutput.checker_class)) {
-        checkerOutput.checker_class = (CheckerClass*)calloc(1, sizeof(CheckerClass));
-        if(!(checkerOutput.checker_class)) return -1;
-        checkerOutput.checker_class_size = 1;
-    }
-    checkerOutput.headfiles = NULL;
-    return 0;
 }
 int isFunctionRepeat(CheckerFunction* fun1, CheckerFunction* fun2) {
     if(fun1 == NULL || fun2 == NULL) return 0;

@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
         freeCheckerOutput();
         exit(EXIT_FAILURE);
     }
-    
+
     freeCheckerOutput();
     fwprintf(stdout,L"\33[32m[I]编译成功！\33[0m\n");
     return 0;
