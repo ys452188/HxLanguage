@@ -1,23 +1,20 @@
 使用头文件：“HxIO.hxh”,"HxLang.hxh";
 
-定义函数 主函数（无参数）：int[][][] {
-	输出日志（"hello"）；
-	return 0；
+定义函数 主函数（无参数）：int {
+	输出日志（"您好！"）；
+	返回值：0；
 }
-fun newFun(arg1:int, arg2:float):float {
-
+定义类：测试类 {
+	公有成员:
+	定义变量:新变量,它的类型是:整型；
+	定义常量:新常量,它的类型是:整型;
 }
-定义类 测试类 {
-	pub:
-	var publicVariable:int;
-	con publicConstant:double;
+定义类：测试类的派生类,它的父类是：测试类 {
+	公有成员:
+	定义变量:新变量1,它的类型是：整型；
+	定义常量:新常量1,它的类型是：整型;
 }
-定义类 测试类的派生类,它的父类是：测试类 {
-	pub:
-	var publicVariable1:int;
-	con publicConstant1:double;
-}
-var newVariable:int;
-var newVariable2:float;
-定义变量 新变量：整型；
-定义常量 新常量：整型;
+定义变量:新变量,它的类型是：整型；
+定义常量:新常量,它的类型是：整型;
+var:newVar,type:int;
+con:newCon,type:int;

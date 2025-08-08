@@ -26,13 +26,15 @@ typedef enum ErrorType {
     ERR_CLASS_BEHIND_NAME_MUST_BE_HUAKUOHAO,             //类名后必须是花括号
     ERR_CLASS_BEHIND_ACCESS_SHOULD_BE_MAOHAO,            //访问权限修饰符后应为冒号
     ERR_NO_VAR_NAME,                                     //缺少变量名
-    ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO,                  //变/常量符号后应为冒号
+    ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO,                  //变/常量符号后应为逗号
     ERR_CLASS_MEMBER_SHOULD_ASSGIN_IN_CONSTRUCT_FUNC,    //类成员应在构造方法中进行初始化
     ERR_SYNTAX_WHEN_DEFINE_CLASS,                        //定义类时的语法错误
     ERR_CLASS_BEHIND_PARENT_KEYWORD_MUST_BE_MAOHAO,      //父类关键字后应为冒号
     ERR_CLASS_NO_PARENT_CLASS_NAME,                      //定义派生类时缺父类名
     ERR_NO_END,                                          //缺少分号结尾
     ERR_ARR_TYPE,                                        //数组类型错误
+    ERR_SYM_NO_TYPE,                                     //定义符号时缺少类型声明
+    ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO,                 //type关键字后应为冒号
 } ErrorType;
 typedef struct CheckerSymbol {
     wchar* name;
@@ -370,8 +372,6 @@ parseRetType_arr:
                     goto parseRetType_arr;
                 }
 
-
-
             }
             //分析函数体
             if(getNextToken()) {
@@ -428,8 +428,15 @@ parseFunBody:
         } else if(wcsequ(tokensPtr->value, L"class") || wcsequ(tokensPtr->value, L"定义类")) {
             //分析类名
             if(getNextToken()) {
-                error(ERR_CLASS_BEHIND_CLASS_SHOULD_BE_NAME, tokensPtr->lin);
+                fwprintf(stderr, L"\33[31m[E]关键字“定义类”或“class”后应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
                 return 255;
+            }
+            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                fwprintf(stderr, L"\33[31m[E]关键字“定义类”或“class”后应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                return 255;
+            }
+            if(getNextToken()) {
+                error(ERR_CLASS_BEHIND_CLASS_SHOULD_BE_NAME, tokensPtr->lin);
             }
             //printf("value: %ls\n",tokensPtr->value);
             if(tokensPtr->type != TOK_ID) {
@@ -531,7 +538,15 @@ parsePublicMember:
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
-                            if(tokensPtr->type != TOK_ID) {
+                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                                fwprintf(stderr, L"\33[31m[E]定义变量时,变量名前应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_NO_VAR_NAME, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(tokensPtr->type != TOK_ID || tokensPtr->value == NULL) {
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
@@ -555,11 +570,27 @@ parsePublicMember:
                             //printf("name: %ls\taddress: %p\n", checkerOutput.checker_class[class_index].pub_sym[pub_sym_index].name,&(checkerOutput.checker_class[class_index].pub_sym[pub_sym_index]));
                             //变量类型
                             if(getNextToken()) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
                                 return 255;
                             }
-                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                            if(!wcsequ(tokensPtr->value, L",")) {
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L"type")) && (!wcsequ(tokensPtr->value, L"它的类型是"))) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                                 return 255;
                             }
                             if(getNextToken()) {
@@ -595,7 +626,15 @@ parsePublicMember:
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
-                            if(tokensPtr->type != TOK_ID) {
+                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                                fwprintf(stderr, L"\33[31m[E]定义常量时,常量名前应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_NO_VAR_NAME, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(tokensPtr->type != TOK_ID || tokensPtr->value == NULL) {
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
@@ -619,11 +658,27 @@ parsePublicMember:
                             //printf("name: %ls\taddress: %p\n", checkerOutput.checker_class[class_index].pub_sym[pub_sym_index].name,&(checkerOutput.checker_class[class_index].pub_sym[pub_sym_index]));
                             //常量类型
                             if(getNextToken()) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
                                 return 255;
                             }
-                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                            if(!wcsequ(tokensPtr->value, L",")) {
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L"type")) && (!wcsequ(tokensPtr->value, L"它的类型是"))) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                                 return 255;
                             }
                             if(getNextToken()) {
@@ -690,7 +745,15 @@ parsePrivateMember:
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
-                            if(tokensPtr->type != TOK_ID) {
+                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                                fwprintf(stderr, L"\33[31m[E]定义变量时,变量名前应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_NO_VAR_NAME, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(tokensPtr->type != TOK_ID || tokensPtr->value == NULL) {
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
@@ -713,11 +776,27 @@ parsePrivateMember:
                             //printf("name: %ls\taddress: %p\n", checkerOutput.checker_class[class_index].pri_sym[pri_sym_index].name, &(checkerOutput.checker_class[class_index].pri_sym[pri_sym_index]));
                             //变量类型
                             if(getNextToken()) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
                                 return 255;
                             }
-                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                            if(!wcsequ(tokensPtr->value, L",")) {
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L"type")) && (!wcsequ(tokensPtr->value, L"它的类型是"))) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                                 return 255;
                             }
                             if(getNextToken()) {
@@ -752,7 +831,15 @@ parsePrivateMember:
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
-                            if(tokensPtr->type != TOK_ID) {
+                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                                fwprintf(stderr, L"\33[31m[E]定义常量时,常量名前应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_NO_VAR_NAME, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(tokensPtr->type != TOK_ID || tokensPtr->value == NULL) {
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
@@ -775,11 +862,27 @@ parsePrivateMember:
                             //printf("name: %ls\taddress: %p\n", checkerOutput.checker_class[class_index].pri_sym[pri_sym_index].name, &(checkerOutput.checker_class[class_index].pri_sym[pri_sym_index]));
                             //常量类型
                             if(getNextToken()) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
                                 return 255;
                             }
-                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                            if(!wcsequ(tokensPtr->value, L",")) {
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L"type")) && (!wcsequ(tokensPtr->value, L"它的类型是"))) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                                 return 255;
                             }
                             if(getNextToken()) {
@@ -846,7 +949,15 @@ parseProtectedMember:
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
-                            if(tokensPtr->type != TOK_ID) {
+                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                                fwprintf(stderr, L"\33[31m[E]定义变量时,变量名前应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_NO_VAR_NAME, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(tokensPtr->type != TOK_ID || tokensPtr->value == NULL) {
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
@@ -869,11 +980,27 @@ parseProtectedMember:
                             //printf("name: %ls\taddress: %p\n", checkerOutput.checker_class[class_index].pro_sym[pro_sym_index].name, &(checkerOutput.checker_class[class_index].pro_sym[pro_sym_index]));
                             //变量类型
                             if(getNextToken()) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
                                 return 255;
                             }
-                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                            if(!wcsequ(tokensPtr->value, L",")) {
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L"type")) && (!wcsequ(tokensPtr->value, L"它的类型是"))) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                                 return 255;
                             }
                             if(getNextToken()) {
@@ -908,7 +1035,15 @@ parseProtectedMember:
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
-                            if(tokensPtr->type != TOK_ID) {
+                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                                fwprintf(stderr, L"\33[31m[E]定义常量时,常量名前应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_NO_VAR_NAME, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(tokensPtr->type != TOK_ID || tokensPtr->value == NULL) {
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
@@ -931,11 +1066,27 @@ parseProtectedMember:
                             //printf("name: %ls\taddress: %p\n", checkerOutput.checker_class[class_index].pro_sym[pro_sym_index].name, &(checkerOutput.checker_class[class_index].pro_sym[pro_sym_index]));
                             //常量类型
                             if(getNextToken()) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
                                 return 255;
                             }
-                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                            if(!wcsequ(tokensPtr->value, L",")) {
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L"type")) && (!wcsequ(tokensPtr->value, L"它的类型是"))) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                                 return 255;
                             }
                             if(getNextToken()) {
@@ -989,7 +1140,15 @@ parseProtectedMember:
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
-                            if(tokensPtr->type != TOK_ID) {
+                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                                fwprintf(stderr, L"\33[31m[E]定义变量时,变量名前应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_NO_VAR_NAME, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(tokensPtr->type != TOK_ID || tokensPtr->value == NULL) {
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
@@ -1012,11 +1171,27 @@ parseProtectedMember:
                             //printf("name: %ls\taddress: %p\n", checkerOutput.checker_class[class_index].pri_sym[pri_sym_index].name, &(checkerOutput.checker_class[class_index].pri_sym[pri_sym_index]));
                             //变量类型
                             if(getNextToken()) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
                                 return 255;
                             }
-                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                            if(!wcsequ(tokensPtr->value, L",")) {
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L"type")) && (!wcsequ(tokensPtr->value, L"它的类型是"))) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                                 return 255;
                             }
                             if(getNextToken()) {
@@ -1051,7 +1226,15 @@ parseProtectedMember:
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
-                            if(tokensPtr->type != TOK_ID) {
+                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                                fwprintf(stderr, L"\33[31m[E]定义常量时,常量名前应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_NO_VAR_NAME, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(tokensPtr->type != TOK_ID || tokensPtr->value == NULL) {
                                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                                 return 255;
                             }
@@ -1074,11 +1257,27 @@ parseProtectedMember:
                             //printf("name: %ls\taddress: %p\n", checkerOutput.checker_class[class_index].pri_sym[pri_sym_index].name, &(checkerOutput.checker_class[class_index].pri_sym[pri_sym_index]));
                             //常量类型
                             if(getNextToken()) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
                                 return 255;
                             }
-                            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
-                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                            if(!wcsequ(tokensPtr->value, L",")) {
+                                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L"type")) && (!wcsequ(tokensPtr->value, L"它的类型是"))) {
+                                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                                return 255;
+                            }
+                            if(getNextToken()) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                                return 255;
+                            }
+                            if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
+                                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                                 return 255;
                             }
                             if(getNextToken()) {
@@ -1129,6 +1328,14 @@ parseProtectedMember:
                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                 return 255;
             }
+            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                fwprintf(stderr, L"\33[31m[E]定义常量时,常量名前应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                return 255;
+            }
+            if(getNextToken()) {
+                error(ERR_NO_VAR_NAME, tokensPtr->lin);
+                return 255;
+            }
             if(tokensPtr->type != TOK_ID || tokensPtr->value == NULL) {
                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                 return 255;
@@ -1153,11 +1360,27 @@ parseProtectedMember:
             wcscpy(checkerOutput.global_sym[global_sym_index].name, tokensPtr->value);
             //printf("%ls\n", checkerOutput.global_sym[global_sym_index].name);
             if(getNextToken()) {
-                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                return 255;
+            }
+            if(!wcsequ(tokensPtr->value, L",")) {
+                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                return 255;
+            }
+            if(getNextToken()) {
+                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                return 255;
+            }
+            if((!wcsequ(tokensPtr->value, L"type")) && (!wcsequ(tokensPtr->value, L"它的类型是"))) {
+                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                return 255;
+            }
+            if(getNextToken()) {
+                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                 return 255;
             }
             if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
-                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                 return 255;
             }
             if(getNextToken()) {
@@ -1181,7 +1404,15 @@ parseProtectedMember:
                 return 255;
             }
             global_sym_index++;
-        } else if(wcsequ(tokensPtr->value, L"var") || wcsequ(tokensPtr->value, L"定义变量")) {      //var
+        } else if(wcsequ(tokensPtr->value, L"var") || wcsequ(tokensPtr->value, L"定义变量")) {   //var
+            if(getNextToken()) {
+                error(ERR_NO_VAR_NAME, tokensPtr->lin);
+                return 255;
+            }
+            if((!wcsequ(tokensPtr->value, L":"))&&(!wcsequ(tokensPtr->value, L"："))) {
+                fwprintf(stderr, L"\33[31m[E]定义变量时,变量名前应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                return 255;
+            }
             if(getNextToken()) {
                 error(ERR_NO_VAR_NAME, tokensPtr->lin);
                 return 255;
@@ -1210,11 +1441,27 @@ parseProtectedMember:
             wcscpy(checkerOutput.global_sym[global_sym_index].name, tokensPtr->value);
             //printf("%ls\n", checkerOutput.global_sym[global_sym_index].name);
             if(getNextToken()) {
-                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                return 255;
+            }
+            if(!wcsequ(tokensPtr->value, L",")) {
+                error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, tokensPtr->lin);
+                return 255;
+            }
+            if(getNextToken()) {
+                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                return 255;
+            }
+            if((!wcsequ(tokensPtr->value, L"type")) && (!wcsequ(tokensPtr->value, L"它的类型是"))) {
+                error(ERR_SYM_NO_TYPE, tokensPtr->lin);
+                return 255;
+            }
+            if(getNextToken()) {
+                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                 return 255;
             }
             if((!wcsequ(tokensPtr->value, L":")) && (!wcsequ(tokensPtr->value, L"："))) {
-                error(ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO, tokensPtr->lin);
+                error(ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO, tokensPtr->lin);
                 return 255;
             }
             if(getNextToken()) {
@@ -1314,7 +1561,7 @@ void freeCheckerOutput() {
                 //wprintf(L"公有成员：\n");
                 for(int j = 0; j < checkerOutput.checker_class[i].pub_sym_size; j++) {
                     if(checkerOutput.checker_class[i].pub_sym[j].name) {
-                        //wprintf(L"%ls\n", checkerOutput.checker_class[i].pub_sym[j].name);
+                        wprintf(L"%ls\n", checkerOutput.checker_class[i].pub_sym[j].name);
                         free(checkerOutput.checker_class[i].pub_sym[j].name);
                         checkerOutput.checker_class[i].pub_sym[j].name = NULL;
                     }
@@ -1446,7 +1693,7 @@ void error(ErrorType e, int lin) {
     break;
 
     case ERR_CLASS_BEHIND_CLASS_SHOULD_BE_NAME: {
-        fwprintf(stderr, L"\33[31m[E]关键字“class”或“定义类”后应为类名(标识符)！(位于第%d行)\33[0m\n", lin);
+        fwprintf(stderr, L"\33[31m[E]关键字“class”或“定义类”后的冒号后应为类名(标识符)！(位于第%d行)\33[0m\n", lin);
     }
     break;
 
@@ -1465,8 +1712,8 @@ void error(ErrorType e, int lin) {
     }
     break;
 
-    case ERR_BEHIND_SYMBOL_SHOULD_BE_MAOHAO: {
-        fwprintf(stderr, L"\33[31m[E]定义变量或常量时,变量或常量符号后应为冒号！(位于第%d行)\33[0m\n", lin);
+    case ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO: {
+        fwprintf(stderr, L"\33[31m[E]定义变量或常量时,变量或常量符号后应为逗号！(位于第%d行)\33[0m\n", lin);
     }
     break;
 
@@ -1497,6 +1744,16 @@ void error(ErrorType e, int lin) {
 
     case ERR_ARR_TYPE: {
         fwprintf(stderr, L"\33[31m[E]数组类型拼写错误！(位于第%d行)\33[0m\n", lin);
+    }
+    break;
+
+    case ERR_SYM_NO_TYPE: {
+        fwprintf(stderr, L"\33[31m[E]定义变量/常量符号时缺少类型声明！(位于第%d行)\33[0m\n", tokensPtr->lin);
+    }
+    break;
+
+    case ERR_BEHIND_TYPE_KW_SHOULD_BE_MAOHAO: {
+        fwprintf(stderr, L"\33[31m[E]关键字“它的类型是”或“type”后应为冒号！(位于第%d行)\33[0m\n", tokensPtr->lin);
     }
     break;
     }
