@@ -1,10 +1,11 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <wchar.h>
-#include "vm.h"
+#include "HXVM.h"
+#include "hxLocale.h"
 int main(int argc, char** argv) {
-    HXVM vm;
-    initHXVM(&vm);
-    closeHXVM(&vm);
+    initLocale();
+    loadObjectFile("test.hxe");
+    freeObjectCode(&hsmCode);
+    printf("%d\n", hsmCode.obj_fun_size);
+    printf("end.");
     return 0;
 }

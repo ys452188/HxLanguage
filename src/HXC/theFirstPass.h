@@ -53,6 +53,7 @@ typedef struct CheckerClass {
     int pro_sym_size;
 } CheckerClass;
 typedef struct CheckerFunction {   //检查阶段的函数
+    int line;
     wchar* name;
     wchar* ret_type;               //NULL表示无返回值
 
@@ -173,7 +174,9 @@ parseNextHeadFile:
                 checkerOutput.checker_func[func_index].args_size = 0;
                 checkerOutput.checker_func[func_index].body = NULL;
                 checkerOutput.checker_func[func_index].body_size = 0;
+                checkerOutput.checker_func[func_index].line = 0;
             }
+            checkerOutput.checker_func[func_index].line = tokensPtr->lin;
             //分析函数名
             if(tokensPtr->type != TOK_ID) {
                 error(ERR_FUN_NAME_SHOULD_BEHIND_FUN,tokensPtr->lin);
@@ -187,11 +190,12 @@ parseNextHeadFile:
 
             //分析参数
             if(getNextToken()) {
+                //printf("%ls\n",tokensPtr->value);
                 error(ERR_FUN_QUITE_SHOULD_BEHIND_NAME,tokensPtr->lin);
                 return 255;
             }
-            //printf("%ls\n",tokensPtr->value);
-            if(wcsequ(tokensPtr->value, L"(") != 1 && wcsequ(tokensPtr->value, L"（") != 1) {
+            if((!wcsequ(tokensPtr->value, L"(")) && (!wcsequ(tokensPtr->value, L"（"))) {
+                //printf("%ls\n",tokensPtr->value);
                 error(ERR_FUN_QUITE_SHOULD_BEHIND_NAME,tokensPtr->lin);
                 return 255;
             }
@@ -331,7 +335,7 @@ parseNextHeadFile:
                     checkerOutput.checker_func[func_index].ret_type = (wchar*)calloc(wcslen(mainTypeName->value)+1, sizeof(wchar));
                     if(!(checkerOutput.checker_func[func_index].ret_type)) return -1;
                     wcscpy(checkerOutput.checker_func[func_index].ret_type, mainTypeName->value);
-                    wprintf(L"返回%ls\n",checkerOutput.checker_func[func_index].ret_type);
+                    //wprintf(L"返回%ls\n",checkerOutput.checker_func[func_index].ret_type);
                     goto parseFunBody;
                 }
                 if((!wcsequ(tokensPtr->value, L"["))&&(!wcsequ(tokensPtr->value, L"【"))) {
@@ -1494,7 +1498,7 @@ void freeCheckerOutput() {
     if(checkerOutput.checker_func) {
         for(int i = 0; i < checkerOutput.func_size; i++) {
             if(checkerOutput.checker_func[i].name) {
-                wprintf(L"函数名：%ls\n", checkerOutput.checker_func[i].name);
+                //wprintf(L"函数名：%ls\n", checkerOutput.checker_func[i].name);
                 free(checkerOutput.checker_func[i].name);
                 checkerOutput.checker_func[i].name = NULL;
             }
@@ -1509,7 +1513,7 @@ void freeCheckerOutput() {
                         checkerOutput.checker_func[i].args[j].name = NULL;
                     }
                     if(checkerOutput.checker_func[i].args[j].type) {
-                        wprintf(L"%ls\n", checkerOutput.checker_func[i].args[j].type);
+                        //wprintf(L"%ls\n", checkerOutput.checker_func[i].args[j].type);
                         free(checkerOutput.checker_func[i].args[j].type);
                         checkerOutput.checker_func[i].args[j].type = NULL;
                     }
@@ -1533,7 +1537,7 @@ void freeCheckerOutput() {
     if(checkerOutput.global_sym) {
         for(int i = 0; i < checkerOutput.global_sym_size; i++) {
             if(checkerOutput.global_sym[i].name) {
-                wprintf(L"%ls\n", checkerOutput.global_sym[i].name);
+                //wprintf(L"%ls\n", checkerOutput.global_sym[i].name);
                 free(checkerOutput.global_sym[i].name);
                 checkerOutput.global_sym[i].name = NULL;
             }
@@ -1561,7 +1565,7 @@ void freeCheckerOutput() {
                 //wprintf(L"公有成员：\n");
                 for(int j = 0; j < checkerOutput.checker_class[i].pub_sym_size; j++) {
                     if(checkerOutput.checker_class[i].pub_sym[j].name) {
-                        wprintf(L"%ls\n", checkerOutput.checker_class[i].pub_sym[j].name);
+                        //wprintf(L"%ls\n", checkerOutput.checker_class[i].pub_sym[j].name);
                         free(checkerOutput.checker_class[i].pub_sym[j].name);
                         checkerOutput.checker_class[i].pub_sym[j].name = NULL;
                     }
@@ -1611,7 +1615,7 @@ void freeCheckerOutput() {
     if(checkerOutput.headfiles) {
         for(int i = 0; i < checkerOutput.headfiles_size; i++) {
             if(checkerOutput.headfiles[i]) {
-                wprintf(L"%ls\n", checkerOutput.headfiles[i]);
+                //wprintf(L"%ls\n", checkerOutput.headfiles[i]);
                 free(checkerOutput.headfiles[i]);
             }
         }
