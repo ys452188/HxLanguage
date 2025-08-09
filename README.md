@@ -27,5 +27,5 @@ var,con,fun,for,if,else,while,for,foreach,break,continue,wchar,char,float,double
 ```
 ---
 # 目标文件
-* 魔数：0xAAEE
+* 魔数：0x48584F424A
 * 后缀：.hxe
