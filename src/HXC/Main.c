@@ -63,6 +63,7 @@ int main(int argc, char** argv) {
     }
     freeCheckerOutput();
     writeObjectFile("test.hxe");
+    //printf("%ls\n", (wchar*)objCode.obj_fun[0].body[0].op_value[0].value.ptr_val);
     freeObjectCode(&objCode);
     //printf("%zd\n", sizeof(ObjectCode));
     fwprintf(stdout,L"\33[32m[I]编译成功！\33[0m\n");

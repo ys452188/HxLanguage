@@ -7,6 +7,7 @@
 #include <wchar.h>
 #include <limits.h>
 #include <stdbool.h>
+#include "HXVM.h"
 
 /* 与用户头部保持一致的类型别名 */
 typedef uint32_t i32;
@@ -50,6 +51,8 @@ typedef struct ObjectCode {
 } ObjectCode;
 
 ObjectCode hsmCode = {0};
+
+/* ---------- 辅助读取与释放函数 ---------- */
 
 /* 读取固定尺寸的数据；返回 0 成功，-1 失败 */
 static int read_exact(FILE* f, void* buf, size_t size) {
@@ -140,10 +143,14 @@ static void freeObjectCode(ObjectCode* c) {
     }
 
     if (c->obj_fun) {
+#ifdef HX_DEBUG
+        printf("\33[33m[DEG]\33[0m释放函数...\n");
+#endif
         for (int i = 0; i < c->obj_fun_size; ++i) {
             ObjFunction* f = &c->obj_fun[i];
-            printf("freeing fun...\n");
-            wprintf(L"[DBG] loaded fun[%d] name='%ls' ret='%ls' args=%d body=%d\n", i, f->name?f->name:L"(null)", f->ret_type?f->ret_type:L"(null)", f->args_size, f->body_size);
+#ifdef HX_DEBUG
+            wprintf(L"\n\33[33m[DEG]\33[0m 函数[%d]:\n\33[33m|---函数名='%ls'\n|---返回类型='%ls'\n|---参数数量=%d\n+---函数体大小=%d\33[0m\n\n", i, f->name?f->name:L"(null)", f->ret_type?f->ret_type:L"(null)", f->args_size, f->body_size);
+#endif
             if (f->name) {
                 free(f->name);
                 f->name = NULL;
@@ -234,7 +241,7 @@ int loadObjectFile(const char* file_name) {
         return -1;
     }
     if (version != 1) {
-        /* 目前只支持 version 1 */ fclose(f);
+        fclose(f);
         return -1;
     }
 

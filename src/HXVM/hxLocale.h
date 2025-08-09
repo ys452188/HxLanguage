@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <wchar.h>
 #include <locale.h>
+typedef wchar_t wchar;
 void initLocale(void) {
     //设置Locale
     if (!setlocale(LC_ALL, "zh_CN.UTF-8")) {

@@ -9,14 +9,15 @@
 #include "theFirstPass.h"
 #pragma pack(1)     //取消结构体对齐
 
-//#define BODY_LENGTH 2048
-
 typedef uint32_t i32;
 typedef enum CompileErrorType {
-    ERR_NO_FUN_MAIN,    //缺少main函数
-    ERR_RELOAD_MAIN,    //重载main函数
-    ERR_MAIN_ARGS,      //main函数参数错误
-    ERR_MAIN_RET_TYPE,  //main函数返回值错误
+    ERR_NO_FUN_MAIN,                 //缺少main函数
+    ERR_RELOAD_MAIN,                 //重载main函数
+    ERR_MAIN_ARGS,                   //main函数参数错误
+    ERR_MAIN_RET_TYPE,               //main函数返回值错误
+    ERR_CALL_FUN,                    //调用函数的语法错误
+    ERR_QUITE_NOT_CORRECTLY_CLOSE,   //括号未正确闭合
+    ERR_FUN_ARGS_SIZE,               //传参个数错误
 } CompileErrorType;
 typedef enum OPCode {   //操作码
     OP_PUT_WCS,         //输出wchar_t*
@@ -81,7 +82,7 @@ int compile(CheckerOutput* IR) {
         return 255;
     }
     if(mainPtr->args == NULL) {                 //无参main
-        if(mainPtr->body == NULL) {             //空函数不进行任何操作
+        if(mainPtr->body == NULL||mainPtr->body_size == 0) {             //空函数不进行任何操作
             //写入空的main函数
             if(objCode.obj_fun==NULL) {
                 objCode.obj_fun = (ObjFunction*)calloc(1, sizeof(ObjFunction));
@@ -104,6 +105,93 @@ int compile(CheckerOutput* IR) {
             //printf("%ls\n",objCode.obj_fun[0].ret_type);
             objCode.start_fun = 0;
             return 0;
+        } else {
+            if(objCode.obj_fun==NULL) {
+                objCode.obj_fun = (ObjFunction*)calloc(1, sizeof(ObjFunction));
+                objCode.obj_fun_size = 1;
+                if(!(objCode.obj_fun)) return -1;
+            }
+            //函数名
+            objCode.obj_fun[0].name = (wchar*)calloc(5, sizeof(wchar));
+            if(!(objCode.obj_fun[0].name)) return 0;
+            wcscpy(objCode.obj_fun[0].name, L"main");
+            //printf("%ls\n", objCode.obj_fun[0].name);
+            objCode.obj_fun[0].args = NULL;
+            objCode.obj_fun[0].args_size = 0;
+            objCode.obj_fun[0].ret_type = (wchar*)calloc(4, sizeof(wchar));
+            if(!(objCode.obj_fun[0].ret_type)) return -1;
+            wcscpy(objCode.obj_fun[0].ret_type, L"int");
+            objCode.start_fun = 0;
+            ObjFunction* objMainPtr = &(objCode.obj_fun[0]);
+
+            objMainPtr->body = (Command*)calloc(1, sizeof(Command));
+            if(!(objMainPtr->body)) return -1;
+            objMainPtr->body_size = 1;
+
+            int cmd_index = 0;
+
+            for(int i = 0; i < mainPtr->body_size; i++) {
+                switch(mainPtr->body[i].type) {
+                case TOK_ID: {
+                    if(wcsequ(mainPtr->body[i].value, L"putString") || wcsequ(mainPtr->body[i].value, L"输出字符串")) {
+                        if(cmd_index >= objMainPtr->body_size) {
+                            objMainPtr->body_size = cmd_index+1;
+                            void* temp = realloc(objMainPtr->body, sizeof(Command)*(mainPtr->body_size));
+                            if(!temp) return -1;
+                            objMainPtr->body = (Command*)temp;
+                            objMainPtr->body[cmd_index].op_value = NULL;
+                            objMainPtr->body[cmd_index].op_value_size = 0;
+                        }
+                        objMainPtr->body[cmd_index].op_value_size = 1;
+                        objMainPtr->body[cmd_index].op = OP_PUT_CS;
+                        objMainPtr->body[cmd_index].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+                        objMainPtr->body[cmd_index].op_value[0].type = TYPE_WCS;
+                        if(i+1 >= mainPtr->body_size) {
+                            compileError(ERR_CALL_FUN, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        i++;
+                        if((!wcsequ(mainPtr->body[i].value, L"("))&&(!wcsequ(mainPtr->body[i].value, L"（"))) {
+                            compileError(ERR_CALL_FUN, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        if(i+1 >= mainPtr->body_size) {
+                            compileError(ERR_CALL_FUN, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        i++;
+                        int arg_value = i;
+                        int count = 0;
+                        while(i < mainPtr->body_size-1) {
+                            if(wcsequ(mainPtr->body[i].value, L")")||wcsequ(mainPtr->body[i].value, L"）")) {
+                                break;
+                            }
+                            count++;
+                            i++;
+                        }
+                        if((!wcsequ(mainPtr->body[i].value, L")"))&&(!wcsequ(mainPtr->body[i].value, L"）"))) {
+                            compileError(ERR_QUITE_NOT_CORRECTLY_CLOSE, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        if(count == 0) {
+                            compileError(ERR_FUN_ARGS_SIZE, mainPtr->body[i].lin);
+                            return 255;
+                        } else if(count == 1) {
+                            //表面值作参数
+                            if(mainPtr->body[arg_value].type == TOK_VAL) {
+                                objMainPtr->body[cmd_index].op_value[0].value.ptr_val = calloc(wcslen(mainPtr->body[arg_value].value)+1, sizeof(wchar));
+                                if(!(objMainPtr->body[cmd_index].op_value[0].value.ptr_val)) return -1;
+                                wcscpy((wchar*)(objMainPtr->body[cmd_index].op_value[0].value.ptr_val), mainPtr->body[arg_value].value);
+                                //printf("%ls\n", (wchar*)(objMainPtr->body[cmd_index].op_value[0].value.ptr_val));
+                            }
+                        } else {
+
+                        }
+                        cmd_index++;
+                    }
+                }
+                }
+            }
         }
     }
     return 0;
@@ -254,6 +342,22 @@ void compileError(CompileErrorType type, int errLine) {
     case ERR_MAIN_RET_TYPE: {
         fwprintf(stderr, L"\33[31m[E]主函数的返回值应为整型！\33[0m\n");
     }
+    break;
+
+    case ERR_CALL_FUN: {
+        fwprintf(stderr, L"\33[31m[E]调用函数的语法错误！(位于第%d行)\33[0m\n", errLine);
+    }
+    break;
+
+    case ERR_QUITE_NOT_CORRECTLY_CLOSE: {
+        fwprintf(stderr, L"\33[31m[E]括号未正确闭合！(位于第%d行)\33[0m\n", errLine);
+    }
+    break;
+
+    case ERR_FUN_ARGS_SIZE: {
+        fwprintf(stderr, L"\33[31m[E]传递给函数的参数的个数有误！(位于第%d行)\33[0m\n", errLine);
+    }
+    break;
     }
     return;
 }
