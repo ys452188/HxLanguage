@@ -8,187 +8,112 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include "compiler.h"
+#define hsmCode objCode
 
-/* 辅助写入函数：整型、wchar 字符串、char 字符串、uint8_t */
-static int write_int32(FILE* f, int32_t v) {
-    if (fwrite(&v, sizeof(int32_t), 1, f) != 1) return -1;
-    return 0;
-}
-static int write_uint32(FILE* f, uint32_t v) {
-    if (fwrite(&v, sizeof(uint32_t), 1, f) != 1) return -1;
-    return 0;
-}
-static int write_uint8(FILE* f, uint8_t v) {
-    if (fwrite(&v, sizeof(uint8_t), 1, f) != 1) return -1;
-    return 0;
-}
-
-/* 写入 wchar_t*：格式 int32 length (字符数, 不含终止符, -1 表示 NULL)，随后写 length * sizeof(wchar_t) 字节数据 */
-static int write_wcs(FILE* f, const wchar_t* s) {
-    if (s == NULL) {
-        if (write_int32(f, -1) != 0) return -1;
-        return 0;
+// 写入 wchar* 字符串（长度 + 内容）
+static void write_wstring(FILE* fp, const wchar* str) {
+    if (!str) {
+        i32 len = 0;
+        fwrite(&len, sizeof(i32), 1, fp);
+        return;
     }
-    size_t len = wcslen(s);
-    if (len > (size_t)INT32_MAX) return -1;
-    if (write_int32(f, (int32_t)len) != 0) return -1;
+    i32 len = (i32)wcslen(str);
+    fwrite(&len, sizeof(i32), 1, fp);
     if (len > 0) {
-        size_t wrote = fwrite(s, sizeof(wchar_t), len, f);
-        if (wrote != len) return -1;
+        fwrite(str, sizeof(wchar), len, fp);
     }
-    return 0;
 }
 
-/* 写入 char*：格式 int32 length (字节数，不含终止符, -1 表示 NULL)，随后写 length 字节数据 */
-static int write_cs(FILE* f, const char* s) {
-    if (s == NULL) {
-        if (write_int32(f, -1) != 0) return -1;
-        return 0;
+// 写入函数（可用于全局函数或类方法）
+static void write_function(FILE* fp, const ObjFunction* fn) {
+    write_wstring(fp, fn->name);
+    write_wstring(fp, fn->ret_type);
+
+    // 写参数表
+    fwrite(&fn->args_size, sizeof(i32), 1, fp);
+    for (i32 a = 0; a < fn->args_size; a++) {
+        write_wstring(fp, fn->args[a].name);
+        write_wstring(fp, fn->args[a].type);
+        fwrite(&fn->args[a].isOnlyRead, sizeof(bool), 1, fp);
     }
-    size_t len = strlen(s);
-    if (len > (size_t)INT32_MAX) return -1;
-    if (write_int32(f, (int32_t)len) != 0) return -1;
-    if (len > 0) {
-        size_t wrote = fwrite(s, 1, len, f);
-        if (wrote != len) return -1;
+
+    // 写指令体
+    fwrite(&fn->body_size, sizeof(i32), 1, fp);
+    for (i32 b = 0; b < fn->body_size; b++) {
+        fwrite(&fn->body[b].op, sizeof(OPCode), 1, fp);
+        fwrite(&fn->body[b].op_value_size, sizeof(i32), 1, fp);
+        for (i32 v = 0; v < fn->body[b].op_value_size; v++) {
+            fwrite(&fn->body[b].op_value[v].type, sizeof(int), 1, fp);
+            if (fn->body[b].op_value[v].type == TYPE_STR) {
+                write_wstring(fp, (wchar*)fn->body[b].op_value[v].value.ptr_val);
+            }
+        }
     }
-    return 0;
 }
 
-/* 主函数：把全局 objCode 写入二进制文件 */
-int writeObjectFile(char* file_name) {
-    if (file_name == NULL) return -1;
-    FILE* f = fopen(file_name, "wb");
-    if (!f) return -1;
+// 写入类成员（公有/私有/保护通用）
+static void write_class_member(FILE* fp, const ClassMember* mem, int count) {
+    fwrite(&count, sizeof(int), 1, fp);
+    for (int m = 0; m < count; m++) {
+        write_wstring(fp, mem[m].name);
+        write_wstring(fp, mem[m].type);
+        fwrite(&mem[m].isOnlyRead, sizeof(bool), 1, fp);
+        fwrite(&mem[m].offest, sizeof(int), 1, fp);
+    }
+}
 
-    /* 写入简单头部：magic + version */
-    const char magic[5] = { 'H','X','O','B','J' }; /* 5 字节 */
-    if (fwrite(magic, 1, 5, f) != 5) {
-        fclose(f);
-        return -1;
-    }
-    uint32_t version = 1;
-    if (write_uint32(f, version) != 0) {
-        fclose(f);
-        return -1;
-    }
-    /* 写入入口函数索引 */
-    if (write_uint32(f, (uint32_t)objCode.start_fun) != 0) {
-        fclose(f);
-        return -1;
-    }
-    /* 写入函数表数量 */
-    if (write_uint32(f, (uint32_t)objCode.obj_fun_size) != 0) {
-        fclose(f);
-        return -1;
-    }
-    /* 每个函数的序列化 */
-    for (uint32_t i = 0; i < (uint32_t)objCode.obj_fun_size; ++i) {
-        ObjFunction* fun = &objCode.obj_fun[i];
-        /* 名字与返回类型都为 wchar_t* */
-        if (write_wcs(f, fun->name) != 0) {
-            fclose(f);
-            return -1;
-        }
-        if (write_wcs(f, fun->ret_type) != 0) {
-            fclose(f);
-            return -1;
-        }
-        /* 参数表 */
-        if (write_uint32(f, (uint32_t)fun->args_size) != 0) {
-            fclose(f);
-            return -1;
-        }
-        for (uint32_t j = 0; j < (uint32_t)fun->args_size; ++j) {
-            ObjSymbol* sym = &fun->args[j];
-            if (write_wcs(f, sym->name) != 0) {
-                fclose(f);
-                return -1;
-            }
-            if (write_wcs(f, sym->type) != 0) {
-                fclose(f);
-                return -1;
-            }
-            uint8_t readonly = sym->isOnlyRead ? 1 : 0;
-            if (write_uint8(f, readonly) != 0) {
-                fclose(f);
-                return -1;
-            }
-        }
-        /* 指令 */
-        if (write_uint32(f, (uint32_t)fun->body_size) != 0) {
-            fclose(f);
-            return -1;
-        }
-        for (uint32_t k = 0; k < (uint32_t)fun->body_size; ++k) {
-            Command* cmd = &fun->body[k];
-            /* 写入操作码（以 32 位写入） */
-            if (write_uint32(f, (uint32_t)cmd->op) != 0) {
-                fclose(f);
-                return -1;
-            }
-            /* 写入 op_value_size */
-            if (write_uint32(f, (uint32_t)cmd->op_value_size) != 0) {
-                fclose(f);
-                return -1;
-            }
-            /* 每个 op_value 序列化 */
-            for (uint32_t v = 0; v < (uint32_t)cmd->op_value_size; ++v) {
-                ObjValue* ov = &cmd->op_value[v];
-                /* 写入类型（int32） */
-                if (write_int32(f, (int32_t)ov->type) != 0) {
-                    fclose(f);
-                    return -1;
-                }
-                /* 写入值本体（根据类型） */
-                if (ov->type == TYPE_WCS) {
-                    wchar_t* w = (wchar_t*)ov->value.ptr_val;
-                    if (write_wcs(f, w) != 0) {
-                        fclose(f);
-                        return -1;
-                    }
-                } else if (ov->type == TYPE_CS) {
-                    char* s = (char*)ov->value.ptr_val;
-                    if (write_cs(f, s) != 0) {
-                        fclose(f);
-                        return -1;
-                    }
-                } else {
-                    /* 未知类型，失败 */
-                    fclose(f);
-                    return -1;
-                }
-            }
-        }
-    }
-    /* 写入全局符号表 */
-    if (write_uint32(f, (uint32_t)objCode.obj_sym_size) != 0) {
-        fclose(f);
-        return -1;
-    }
-    for (uint32_t i = 0; i < (uint32_t)objCode.obj_sym_size; ++i) {
-        ObjSymbol* sym = &objCode.obj_sym[i];
-        if (write_wcs(f, sym->name) != 0) {
-            fclose(f);
-            return -1;
-        }
-        if (write_wcs(f, sym->type) != 0) {
-            fclose(f);
-            return -1;
-        }
-        uint8_t readonly = sym->isOnlyRead ? 1 : 0;
-        if (write_uint8(f, readonly) != 0) {
-            fclose(f);
-            return -1;
-        }
-    }
-    /* flush & close */
-    if (fflush(f) != 0) {
-        fclose(f);
-        return -1;
-    }
-    if (fclose(f) != 0) return -1;
+int writeObjectFile(const char* file_name) {
+    FILE* fp = fopen(file_name, "wb");
+    if (!fp) return -1;
 
+    // 写 start_fun
+    fwrite(&hsmCode.start_fun, sizeof(i32), 1, fp);
+
+    // 写全局符号表
+    fwrite(&hsmCode.obj_sym_size, sizeof(i32), 1, fp);
+    for (i32 i = 0; i < hsmCode.obj_sym_size; i++) {
+        write_wstring(fp, hsmCode.obj_sym[i].name);
+        write_wstring(fp, hsmCode.obj_sym[i].type);
+        fwrite(&hsmCode.obj_sym[i].isOnlyRead, sizeof(bool), 1, fp);
+    }
+
+    // 写全局函数表
+    fwrite(&hsmCode.obj_fun_size, sizeof(i32), 1, fp);
+    for (i32 i = 0; i < hsmCode.obj_fun_size; i++) {
+        write_function(fp, &hsmCode.obj_fun[i]);
+    }
+
+    // 写类表
+    fwrite(&hsmCode.obj_class_size, sizeof(i32), 1, fp);
+    for (i32 i = 0; i < hsmCode.obj_class_size; i++) {
+        ObjClass* cls = &hsmCode.obj_class[i];
+        write_wstring(fp, cls->name);
+
+        // 写成员
+        write_class_member(fp, cls->pub_sym, cls->pub_sym_size);
+        write_class_member(fp, cls->pri_sym, cls->pri_sym_size);
+        write_class_member(fp, cls->pro_sym, cls->pro_sym_size);
+
+        // 写公有方法
+        fwrite(&cls->pub_fun_size, sizeof(int), 1, fp);
+        for (int f = 0; f < cls->pub_fun_size; f++) {
+            write_function(fp, &cls->pub_fun[f]);
+        }
+
+        // 写私有方法
+        fwrite(&cls->pri_fun_size, sizeof(int), 1, fp);
+        for (int f = 0; f < cls->pri_fun_size; f++) {
+            write_function(fp, &cls->pri_fun[f]);
+        }
+
+        // 写保护方法
+        fwrite(&cls->pro_fun_suze, sizeof(int), 1, fp);
+        for (int f = 0; f < cls->pro_fun_suze; f++) {
+            write_function(fp, &cls->pro_fun[f]);
+        }
+    }
+
+    fclose(fp);
     return 0;
 }
 #endif

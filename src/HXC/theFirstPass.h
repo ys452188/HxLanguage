@@ -125,15 +125,15 @@ parseNextHeadFile:
                 checkerOutput.headfiles[headfiles_index] = NULL;
             }
             if(getNextToken()) {
-                fwprintf(stderr, L"\33[31m[E]缺少头文件名(字符串或宽字符串)！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                fwprintf(stderr, L"\33[31m[E]缺少头文件名(字符串)！(位于第%d行)\33[0m\n", tokensPtr->lin);
                 return 255;
             }
             if(tokensPtr->type != TOK_VAL) {
-                fwprintf(stderr, L"\33[31m[E]缺少头文件名(字符串或宽字符串)！(位于第%d行)\33[0m\n", tokensPtr->lin);
+                fwprintf(stderr, L"\33[31m[E]缺少头文件名(字符串)！(位于第%d行)\33[0m\n", tokensPtr->lin);
                 return 255;
             }
-            if(tokensPtr->mark != CS && tokensPtr->mark != WCS) {
-                fwprintf(stderr, L"\33[31m[E]缺少头文件名(字符串或宽字符串)！(位于第%d行)\33[0m\n", tokensPtr->lin);
+            if(tokensPtr->mark != STR) {
+                fwprintf(stderr, L"\33[31m[E]缺少头文件名(字符串)！(位于第%d行)\33[0m\n", tokensPtr->lin);
                 return 255;
             }
             checkerOutput.headfiles[headfiles_index] = (wchar*)calloc(wcslen(tokensPtr->value)+1, sizeof(wchar));

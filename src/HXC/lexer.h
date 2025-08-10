@@ -21,10 +21,8 @@ typedef enum TokenType {
 typedef struct Token {
     wchar* value;
     TokenType type;
-#define WC 0
+#define STR 0
 #define CH 1
-#define WCS 2
-#define CS 3
     int mark;  //标记,用于区分宽窄字符(串)
     int lin;
 } Token;
@@ -99,28 +97,6 @@ int setTokens(void) {
             tokens[tokenIndex].lin = lin;
             //printf("%ls\n",tokens[tokenIndex].value);
             tokenIndex++;
-        } else if(*p == L'L' && (*(p+1) == L'\"' || *(p+1) == L'“' || *(p+1) == L'”')) {  //宽字符串
-            p++;  //跳过L
-            p++;  //跳过双引号
-            wchar* start = p;
-            while(*p != L'\0') {
-                if(*p == L'\n') lin++;
-                if((*p == L'\"' || *p == L'“' || *p == L'”') && ((*(p-1) == L'\\' && *(p-2) == L'\\') || *(p - 1) != L'\\')) break;
-                p++;
-            }
-            if(*p != L'\"' && *p != L'“' && *p != L'”') {
-                lexerError(ERR_WSTR_NOT_END, lin);
-                return 255;
-            }
-            int length = p - start;
-            tokens[tokenIndex].value = (wchar*)calloc(length + 1, sizeof(wchar));
-            if(!(tokens[tokenIndex].value)) return -1;
-            wcsncpy(tokens[tokenIndex].value,start,length);
-            tokens[tokenIndex].type = TOK_VAL;
-            tokens[tokenIndex].mark = WCS;
-            tokens[tokenIndex].lin = lin;
-            tokenIndex++;
-            p++;
         } else if(*p == L'\"' || *p == L'“' ||*p == L'”') {    //字符串
             p++;
             wchar* start = p;
@@ -138,29 +114,7 @@ int setTokens(void) {
             if(!(tokens[tokenIndex].value)) return -1;
             wcsncpy(tokens[tokenIndex].value,start,length);
             tokens[tokenIndex].type = TOK_VAL;
-            tokens[tokenIndex].mark = CS;
-            tokens[tokenIndex].lin = lin;
-            tokenIndex++;
-            p++;
-        } else if(*p == L'L' && (*(p+1) == L'\'' || *(p+1) == L'’' || *(p+1) == L'‘')) {   //宽字符
-            p++;
-            p++;
-            wchar* start = p;
-            while(*p != L'\0') {
-                if(*p == L'\n') lin++;
-                if((*p == L'\'' || *p==L'‘' || *p == L'’') && ((*(p-1) == L'\\' && *(p-2) == L'\\') || *(p-1) != L'\\')) break;
-                p++;
-            }
-            if(*p != L'\'' && *p != L'‘' && *p != L'’') {
-                lexerError(ERR_WC_NOT_END, lin);
-                return 255;
-            }
-            int length = p - start;
-            tokens[tokenIndex].value = (wchar*)calloc(length + 1, sizeof(wchar));
-            if(!(tokens[tokenIndex].value)) return -1;
-            wcsncpy(tokens[tokenIndex].value,start,length);
-            tokens[tokenIndex].type = TOK_VAL;
-            tokens[tokenIndex].mark = WC;
+            tokens[tokenIndex].mark = STR;
             tokens[tokenIndex].lin = lin;
             tokenIndex++;
             p++;

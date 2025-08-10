@@ -9,19 +9,17 @@
 #include <stdbool.h>
 #include "HXVM.h"
 
-/* 与用户头部保持一致的类型别名 */
 typedef uint32_t i32;
-typedef enum OPCode {
-    OP_PUT_WCS,
-    OP_PUT_CS,
+
+typedef enum OPCode {   //操作码
+    OP_PUT_STR,         //输出wchar_t*
 } OPCode;
 typedef struct ObjValue {
     union {
         void* ptr_val;
     } value;
     enum {
-        TYPE_WCS,
-        TYPE_CS,
+        TYPE_STR,
     } type;
 } ObjValue;
 typedef struct Command {
@@ -29,483 +27,279 @@ typedef struct Command {
     ObjValue* op_value;
     i32 op_value_size;
 } Command;
+typedef struct ClassMember {
+    wchar* name;
+    wchar* type;
+    bool isOnlyRead;
+    int offest;   //偏移量
+} ClassMember;
+
 typedef struct ObjSymbol {
-    wchar_t* name;
-    wchar_t* type;
+    wchar* name;
+    wchar* type;
     bool isOnlyRead;
 } ObjSymbol;
 typedef struct ObjFunction {
-    wchar_t* name;
-    wchar_t* ret_type;
+    wchar* name;
+    wchar* ret_type;
     ObjSymbol* args;
     i32 args_size;
     Command* body;
     i32 body_size;
 } ObjFunction;
+typedef struct ObjClass {
+    wchar* name;
+    ClassMember* pub_sym;
+    int pub_sym_size;
+    ClassMember* pri_sym;
+    int pri_sym_size;
+    ClassMember* pro_sym;
+    int pro_sym_size;
+
+    ObjFunction* pub_fun;
+    int pub_fun_size;
+    ObjFunction* pri_fun;
+    int pri_fun_size;
+    ObjFunction* pro_fun;
+    int pro_fun_suze;
+} ObjClass;
 typedef struct ObjectCode {
-    i32 start_fun;
+    i32 start_fun;    //入口点,main函数的索引
     ObjFunction* obj_fun;
     i32 obj_fun_size;
+
     ObjSymbol* obj_sym;
     i32 obj_sym_size;
+
+    ObjClass* obj_class;
+    i32 obj_class_size;
 } ObjectCode;
 
 ObjectCode hsmCode = {0};
 
-/* ---------- 辅助读取与释放函数 ---------- */
+// 读取 wchar* 字符串（先读长度，再读内容，自动加 \0）
+static wchar* read_wstring(FILE* fp) {
+    i32 len;
+    if (fread(&len, sizeof(i32), 1, fp) != 1) return NULL;
+    if (len <= 0) return NULL;
 
-/* 读取固定尺寸的数据；返回 0 成功，-1 失败 */
-static int read_exact(FILE* f, void* buf, size_t size) {
-    if (size == 0) return 0;
-    size_t r = fread(buf, 1, size, f);
-    if (r != size) return -1;
-    return 0;
-}
-
-/* 读取 int32_t、uint32_t、uint8_t */
-static int read_int32(FILE* f, int32_t* out) {
-    return read_exact(f, out, sizeof(int32_t));
-}
-static int read_uint32(FILE* f, uint32_t* out) {
-    return read_exact(f, out, sizeof(uint32_t));
-}
-static int read_uint8(FILE* f, uint8_t* out) {
-    return read_exact(f, out, sizeof(uint8_t));
-}
-
-/* 读取 wchar_t*：先读 int32 length（-1 表示 NULL），否则分配 length+1，
-   读取 length 个 wchar_t 并在末尾加入 L'\0'。 */
-static int read_wcs_alloc(FILE* f, wchar_t** out) {
-    int32_t len;
-    if (read_int32(f, &len) != 0) return -1;
-    if (len == -1) {
-        *out = NULL;
-        return 0;
+    wchar* str = (wchar*)malloc((len + 1) * sizeof(wchar));
+    if (!str) return NULL;
+    if (fread(str, sizeof(wchar), len, fp) != (size_t)len) {
+        free(str);
+        return NULL;
     }
-    if (len < 0) return -1;
-    /* 检查是否合法大小 */
-    if ((uint32_t)len > (UINT_MAX / sizeof(wchar_t))) return -1;
-    wchar_t* buf = (wchar_t*)calloc((size_t)len + 1, sizeof(wchar_t));
-    if (!buf) return -1;
-    if (len > 0) {
-        if (read_exact(f, buf, (size_t)len * sizeof(wchar_t)) != 0) {
-            free(buf);
-            return -1;
+    str[len] = L'\0';
+    return str;
+}
+
+// 读取一个函数（全局或类方法）
+static void read_function(FILE* fp, ObjFunction* fn) {
+    fn->name = read_wstring(fp);
+    fn->ret_type = read_wstring(fp);
+
+    // 读取参数
+    fread(&fn->args_size, sizeof(i32), 1, fp);
+    if (fn->args_size > 0) {
+        fn->args = (ObjSymbol*)calloc(fn->args_size, sizeof(ObjSymbol));
+        for (i32 a = 0; a < fn->args_size; a++) {
+            fn->args[a].name = read_wstring(fp);
+            fn->args[a].type = read_wstring(fp);
+            fread(&fn->args[a].isOnlyRead, sizeof(bool), 1, fp);
         }
-    }
-    buf[len] = L'\0';
-    *out = buf;
-    return 0;
-}
-
-/* 读取 char*：先读 int32 length（-1 表示 NULL），否则分配 length+1，
-   读取 length 字节并在末尾加入 '\0'。 */
-static int read_cs_alloc(FILE* f, char** out) {
-    int32_t len;
-    if (read_int32(f, &len) != 0) return -1;
-    if (len == -1) {
-        *out = NULL;
-        return 0;
-    }
-    if (len < 0) return -1;
-    if ((uint32_t)len > UINT_MAX) return -1;
-    char* buf = (char*)calloc((size_t)len + 1, 1);
-    if (!buf) return -1;
-    if (len > 0) {
-        if (read_exact(f, buf, (size_t)len) != 0) {
-            free(buf);
-            return -1;
-        }
-    }
-    buf[len] = '\0';
-    *out = buf;
-    return 0;
-}
-
-/* 通用释放函数：释放 ObjectCode 中各字段分配的动态内存 */
-static void freeObjectCode(ObjectCode* c) {
-    if (!c) return;
-
-    if (c->obj_sym) {
-        for (int i = 0; i < c->obj_sym_size; ++i) {
-            if (c->obj_sym[i].name) {
-                free(c->obj_sym[i].name);
-                c->obj_sym[i].name = NULL;
-            }
-            if (c->obj_sym[i].type) {
-                free(c->obj_sym[i].type);
-                c->obj_sym[i].type = NULL;
-            }
-        }
-        free(c->obj_sym);
-        c->obj_sym = NULL;
-        c->obj_sym_size = 0;
+    } else {
+        fn->args = NULL;
     }
 
-    if (c->obj_fun) {
-#ifdef HX_DEBUG
-        printf("\33[33m[DEG]\33[0m释放函数...\n");
-#endif
-        for (int i = 0; i < c->obj_fun_size; ++i) {
-            ObjFunction* f = &c->obj_fun[i];
-#ifdef HX_DEBUG
-            wprintf(L"\n\33[33m[DEG]\33[0m 函数[%d]:\n\33[33m|---函数名='%ls'\n|---返回类型='%ls'\n|---参数数量=%d\n+---函数体大小=%d\33[0m\n\n", i, f->name?f->name:L"(null)", f->ret_type?f->ret_type:L"(null)", f->args_size, f->body_size);
-#endif
-            if (f->name) {
-                free(f->name);
-                f->name = NULL;
-            }
-            if (f->ret_type) {
-                free(f->ret_type);
-                f->ret_type = NULL;
-            }
-
-            if (f->args) {
-                for (int j = 0; j < f->args_size; ++j) {
-                    if (f->args[j].name) {
-                        free(f->args[j].name);
-                        f->args[j].name = NULL;
-                    }
-                    if (f->args[j].type) {
-                        free(f->args[j].type);
-                        f->args[j].type = NULL;
+    // 读取指令体
+    fread(&fn->body_size, sizeof(i32), 1, fp);
+    if (fn->body_size > 0) {
+        fn->body = (Command*)calloc(fn->body_size, sizeof(Command));
+        for (i32 b = 0; b < fn->body_size; b++) {
+            fread(&fn->body[b].op, sizeof(OPCode), 1, fp);
+            fread(&fn->body[b].op_value_size, sizeof(i32), 1, fp);
+            if (fn->body[b].op_value_size > 0) {
+                fn->body[b].op_value = (ObjValue*)calloc(fn->body[b].op_value_size, sizeof(ObjValue));
+                for (i32 v = 0; v < fn->body[b].op_value_size; v++) {
+                    fread(&fn->body[b].op_value[v].type, sizeof(int), 1, fp);
+                    if (fn->body[b].op_value[v].type == TYPE_STR) {
+                        fn->body[b].op_value[v].value.ptr_val = read_wstring(fp);
                     }
                 }
-                free(f->args);
-                f->args = NULL;
-                f->args_size = 0;
-            }
-
-            if (f->body) {
-                for (int k = 0; k < f->body_size; ++k) {
-                    Command* cmd = &f->body[k];
-                    if (cmd->op_value) {
-                        for (int v = 0; v < cmd->op_value_size; ++v) {
-                            ObjValue* ov = &cmd->op_value[v];
-                            if (ov->type == TYPE_WCS) {
-                                if (ov->value.ptr_val) {
-                                    free(ov->value.ptr_val);
-                                    ov->value.ptr_val = NULL;
-                                }
-                            } else if (ov->type == TYPE_CS) {
-                                if (ov->value.ptr_val) {
-                                    free(ov->value.ptr_val);
-                                    ov->value.ptr_val = NULL;
-                                }
-                            } else {
-                                /* 如果将来有新类型，这里也应该释放对应资源 */
-                            }
-                        }
-                        free(cmd->op_value);
-                        cmd->op_value = NULL;
-                        cmd->op_value_size = 0;
-                    }
-                }
-                free(f->body);
-                f->body = NULL;
-                f->body_size = 0;
+            } else {
+                fn->body[b].op_value = NULL;
             }
         }
-        free(c->obj_fun);
-        c->obj_fun = NULL;
-        c->obj_fun_size = 0;
+    } else {
+        fn->body = NULL;
     }
-
-    /* 清除入口点 */
-    c->start_fun = 0;
 }
 
-/* ---------- 主加载函数 ---------- */
+// 读取类成员数组
+static ClassMember* read_class_member(FILE* fp, int* count) {
+    fread(count, sizeof(int), 1, fp);
+    if (*count <= 0) return NULL;
+
+    ClassMember* arr = (ClassMember*)calloc(*count, sizeof(ClassMember));
+    for (int m = 0; m < *count; m++) {
+        arr[m].name = read_wstring(fp);
+        arr[m].type = read_wstring(fp);
+        fread(&arr[m].isOnlyRead, sizeof(bool), 1, fp);
+        fread(&arr[m].offest, sizeof(int), 1, fp);
+    }
+    return arr;
+}
 
 int loadObjectFile(const char* file_name) {
-    if (file_name == NULL) return -1;
-    FILE* f = fopen(file_name, "rb");
-    if (!f) return -1;
+    FILE* fp = fopen(file_name, "rb");
+    if (!fp) return -1;
 
-    /* 验证 magic */
-    char magic[5];
-    if (read_exact(f, magic, 5) != 0) {
-        fclose(f);
-        return -1;
-    }
-    const char expected_magic[5] = { 'H','X','O','B','J' };
-    if (memcmp(magic, expected_magic, 5) != 0) {
-        fclose(f);
-        return -1;
-    }
+    memset(&hsmCode, 0, sizeof(ObjectCode));
 
-    /* 版本 */
-    uint32_t version;
-    if (read_uint32(f, &version) != 0) {
-        fclose(f);
-        return -1;
-    }
-    if (version != 1) {
-        fclose(f);
-        return -1;
-    }
+    // 读取 start_fun
+    fread(&hsmCode.start_fun, sizeof(i32), 1, fp);
 
-    /* 读入并构建一个临时 ObjectCode，出错时方便统一释放 */
-    ObjectCode tmp = {0};
-    tmp.start_fun = 0;
-    tmp.obj_fun = NULL;
-    tmp.obj_fun_size = 0;
-    tmp.obj_sym = NULL;
-    tmp.obj_sym_size = 0;
-
-    /* start_fun */
-    uint32_t start_fun_u;
-    if (read_uint32(f, &start_fun_u) != 0) {
-        freeObjectCode(&tmp);
-        fclose(f);
-        return -1;
-    }
-    tmp.start_fun = (i32)start_fun_u;
-
-    /* obj_fun_size */
-    uint32_t fun_count;
-    if (read_uint32(f, &fun_count) != 0) {
-        freeObjectCode(&tmp);
-        fclose(f);
-        return -1;
-    }
-    if (fun_count > INT_MAX) {
-        freeObjectCode(&tmp);
-        fclose(f);
-        return -1;
-    }
-
-    if (fun_count > 0) {
-        tmp.obj_fun = (ObjFunction*)calloc((size_t)fun_count, sizeof(ObjFunction));
-        if (!tmp.obj_fun) {
-            freeObjectCode(&tmp);
-            fclose(f);
-            return -1;
+    // 读取全局符号
+    fread(&hsmCode.obj_sym_size, sizeof(i32), 1, fp);
+    if (hsmCode.obj_sym_size > 0) {
+        hsmCode.obj_sym = (ObjSymbol*)calloc(hsmCode.obj_sym_size, sizeof(ObjSymbol));
+        for (i32 i = 0; i < hsmCode.obj_sym_size; i++) {
+            hsmCode.obj_sym[i].name = read_wstring(fp);
+            hsmCode.obj_sym[i].type = read_wstring(fp);
+            fread(&hsmCode.obj_sym[i].isOnlyRead, sizeof(bool), 1, fp);
         }
-        tmp.obj_fun_size = (i32)fun_count;
+    }
 
-        for (uint32_t i = 0; i < fun_count; ++i) {
-            ObjFunction* fun = &tmp.obj_fun[i];
-            fun->name = NULL;
-            fun->ret_type = NULL;
-            fun->args = NULL;
-            fun->args_size = 0;
-            fun->body = NULL;
-            fun->body_size = 0;
+    // 读取全局函数
+    fread(&hsmCode.obj_fun_size, sizeof(i32), 1, fp);
+    if (hsmCode.obj_fun_size > 0) {
+        hsmCode.obj_fun = (ObjFunction*)calloc(hsmCode.obj_fun_size, sizeof(ObjFunction));
+        for (i32 i = 0; i < hsmCode.obj_fun_size; i++) {
+            read_function(fp, &hsmCode.obj_fun[i]);
+        }
+    }
 
-            /* name */
-            if (read_wcs_alloc(f, &fun->name) != 0) {
-                freeObjectCode(&tmp);
-                fclose(f);
-                return -1;
-            }
-            /* ret_type */
-            if (read_wcs_alloc(f, &fun->ret_type) != 0) {
-                freeObjectCode(&tmp);
-                fclose(f);
-                return -1;
-            }
+    // 读取类表
+    fread(&hsmCode.obj_class_size, sizeof(i32), 1, fp);
+    if (hsmCode.obj_class_size > 0) {
+        hsmCode.obj_class = (ObjClass*)calloc(hsmCode.obj_class_size, sizeof(ObjClass));
+        for (i32 i = 0; i < hsmCode.obj_class_size; i++) {
+            ObjClass* cls = &hsmCode.obj_class[i];
+            cls->name = read_wstring(fp);
 
-            /* args_size */
-            uint32_t args_cnt;
-            if (read_uint32(f, &args_cnt) != 0) {
-                freeObjectCode(&tmp);
-                fclose(f);
-                return -1;
-            }
-            if (args_cnt > INT_MAX) {
-                freeObjectCode(&tmp);
-                fclose(f);
-                return -1;
-            }
-            if (args_cnt > 0) {
-                fun->args = (ObjSymbol*)calloc((size_t)args_cnt, sizeof(ObjSymbol));
-                if (!fun->args) {
-                    freeObjectCode(&tmp);
-                    fclose(f);
-                    return -1;
-                }
-                fun->args_size = (i32)args_cnt;
-                for (uint32_t j = 0; j < args_cnt; ++j) {
-                    fun->args[j].name = NULL;
-                    fun->args[j].type = NULL;
-                    fun->args[j].isOnlyRead = false;
+            // 读取成员
+            cls->pub_sym = read_class_member(fp, &cls->pub_sym_size);
+            cls->pri_sym = read_class_member(fp, &cls->pri_sym_size);
+            cls->pro_sym = read_class_member(fp, &cls->pro_sym_size);
 
-                    if (read_wcs_alloc(f, &fun->args[j].name) != 0) {
-                        freeObjectCode(&tmp);
-                        fclose(f);
-                        return -1;
-                    }
-                    if (read_wcs_alloc(f, &fun->args[j].type) != 0) {
-                        freeObjectCode(&tmp);
-                        fclose(f);
-                        return -1;
-                    }
-                    uint8_t ro;
-                    if (read_uint8(f, &ro) != 0) {
-                        freeObjectCode(&tmp);
-                        fclose(f);
-                        return -1;
-                    }
-                    fun->args[j].isOnlyRead = (ro != 0);
+            // 读取公有方法
+            fread(&cls->pub_fun_size, sizeof(int), 1, fp);
+            if (cls->pub_fun_size > 0) {
+                cls->pub_fun = (ObjFunction*)calloc(cls->pub_fun_size, sizeof(ObjFunction));
+                for (int f = 0; f < cls->pub_fun_size; f++) {
+                    read_function(fp, &cls->pub_fun[f]);
                 }
             }
 
-            /* body_size */
-            uint32_t body_cnt;
-            if (read_uint32(f, &body_cnt) != 0) {
-                freeObjectCode(&tmp);
-                fclose(f);
-                return -1;
-            }
-            if (body_cnt > INT_MAX) {
-                freeObjectCode(&tmp);
-                fclose(f);
-                return -1;
-            }
-            if (body_cnt > 0) {
-                fun->body = (Command*)calloc((size_t)body_cnt, sizeof(Command));
-                if (!fun->body) {
-                    freeObjectCode(&tmp);
-                    fclose(f);
-                    return -1;
+            // 读取私有方法
+            fread(&cls->pri_fun_size, sizeof(int), 1, fp);
+            if (cls->pri_fun_size > 0) {
+                cls->pri_fun = (ObjFunction*)calloc(cls->pri_fun_size, sizeof(ObjFunction));
+                for (int f = 0; f < cls->pri_fun_size; f++) {
+                    read_function(fp, &cls->pri_fun[f]);
                 }
-                fun->body_size = (i32)body_cnt;
-                for (uint32_t k = 0; k < body_cnt; ++k) {
-                    Command* cmd = &fun->body[k];
-                    cmd->op_value = NULL;
-                    cmd->op_value_size = 0;
+            }
 
-                    uint32_t op_u;
-                    if (read_uint32(f, &op_u) != 0) {
-                        freeObjectCode(&tmp);
-                        fclose(f);
-                        return -1;
-                    }
-                    cmd->op = (OPCode)op_u;
-
-                    uint32_t op_val_cnt;
-                    if (read_uint32(f, &op_val_cnt) != 0) {
-                        freeObjectCode(&tmp);
-                        fclose(f);
-                        return -1;
-                    }
-                    if (op_val_cnt > INT_MAX) {
-                        freeObjectCode(&tmp);
-                        fclose(f);
-                        return -1;
-                    }
-                    cmd->op_value_size = (i32)op_val_cnt;
-
-                    if (op_val_cnt > 0) {
-                        cmd->op_value = (ObjValue*)calloc((size_t)op_val_cnt, sizeof(ObjValue));
-                        if (!cmd->op_value) {
-                            freeObjectCode(&tmp);
-                            fclose(f);
-                            return -1;
-                        }
-                        for (uint32_t v = 0; v < op_val_cnt; ++v) {
-                            ObjValue* ov = &cmd->op_value[v];
-                            ov->value.ptr_val = NULL;
-                            int32_t type_i;
-                            if (read_int32(f, &type_i) != 0) {
-                                freeObjectCode(&tmp);
-                                fclose(f);
-                                return -1;
-                            }
-                            ov->type = (int)type_i;
-                            if (ov->type == TYPE_WCS) {
-                                wchar_t* w;
-                                if (read_wcs_alloc(f, &w) != 0) {
-                                    freeObjectCode(&tmp);
-                                    fclose(f);
-                                    return -1;
-                                }
-                                ov->value.ptr_val = w;
-                            } else if (ov->type == TYPE_CS) {
-                                char* s;
-                                if (read_cs_alloc(f, &s) != 0) {
-                                    freeObjectCode(&tmp);
-                                    fclose(f);
-                                    return -1;
-                                }
-                                ov->value.ptr_val = s;
-                            } else {
-                                /* 遇到未知类型，失败 */
-                                freeObjectCode(&tmp);
-                                fclose(f);
-                                return -1;
-                            }
-                        }
-                    }
+            // 读取保护方法
+            fread(&cls->pro_fun_suze, sizeof(int), 1, fp);
+            if (cls->pro_fun_suze > 0) {
+                cls->pro_fun = (ObjFunction*)calloc(cls->pro_fun_suze, sizeof(ObjFunction));
+                for (int f = 0; f < cls->pro_fun_suze; f++) {
+                    read_function(fp, &cls->pro_fun[f]);
                 }
             }
         }
     }
 
-    /* 全局符号表 */
-    uint32_t sym_count;
-    if (read_uint32(f, &sym_count) != 0) {
-        freeObjectCode(&tmp);
-        fclose(f);
-        return -1;
-    }
-    if (sym_count > INT_MAX) {
-        freeObjectCode(&tmp);
-        fclose(f);
-        return -1;
-    }
-    if (sym_count > 0) {
-        tmp.obj_sym = (ObjSymbol*)calloc((size_t)sym_count, sizeof(ObjSymbol));
-        if (!tmp.obj_sym) {
-            freeObjectCode(&tmp);
-            fclose(f);
-            return -1;
-        }
-        tmp.obj_sym_size = (i32)sym_count;
-        for (uint32_t i = 0; i < sym_count; ++i) {
-            tmp.obj_sym[i].name = NULL;
-            tmp.obj_sym[i].type = NULL;
-            tmp.obj_sym[i].isOnlyRead = false;
-
-            if (read_wcs_alloc(f, &tmp.obj_sym[i].name) != 0) {
-                freeObjectCode(&tmp);
-                fclose(f);
-                return -1;
-            }
-            if (read_wcs_alloc(f, &tmp.obj_sym[i].type) != 0) {
-                freeObjectCode(&tmp);
-                fclose(f);
-                return -1;
-            }
-            uint8_t ro;
-            if (read_uint8(f, &ro) != 0) {
-                freeObjectCode(&tmp);
-                fclose(f);
-                return -1;
-            }
-            tmp.obj_sym[i].isOnlyRead = (ro != 0);
-        }
-    }
-
-    /* 成功：先释放目标全局变量已有内容，再把 tmp 移交给目标全局变量 hsmCode。 */
-    /* 假设 hsmCode 在别处定义为全局变量 */
-    freeObjectCode(&hsmCode); /* 释放原有内容（若有）*/
-    hsmCode.start_fun = tmp.start_fun;
-    hsmCode.obj_fun_size = tmp.obj_fun_size;
-    hsmCode.obj_fun = tmp.obj_fun;
-    hsmCode.obj_sym_size = tmp.obj_sym_size;
-    hsmCode.obj_sym = tmp.obj_sym;
-
-    /* 避免 freeObjectCode 再次释放 tmp 内容（tmp 已转移所有权） */
-    tmp.obj_fun = NULL;
-    tmp.obj_fun_size = 0;
-    tmp.obj_sym = NULL;
-    tmp.obj_sym_size = 0;
-
-    fclose(f);
+    fclose(fp);
     return 0;
 }
+// 释放 wchar* 字符串
+static void free_wstring(wchar* s) {
+    if (s) free(s);
+}
 
+// 释放符号表
+static void free_symbol(ObjSymbol* sym, int count) {
+    if (!sym) return;
+    for (int i = 0; i < count; i++) {
+        free_wstring(sym[i].name);
+        free_wstring(sym[i].type);
+    }
+    free(sym);
+}
+
+// 释放函数
+static void free_function(ObjFunction* fn, int count) {
+    if (!fn) return;
+    for (int i = 0; i < count; i++) {
+        free_wstring(fn[i].name);
+        free_wstring(fn[i].ret_type);
+        free_symbol(fn[i].args, fn[i].args_size);
+
+        if (fn[i].body) {
+            for (int b = 0; b < fn[i].body_size; b++) {
+                if (fn[i].body[b].op_value) {
+                    for (int v = 0; v < fn[i].body[b].op_value_size; v++) {
+                        if (fn[i].body[b].op_value[v].type == TYPE_STR) {
+                            free_wstring((wchar*)fn[i].body[b].op_value[v].value.ptr_val);
+                        }
+                    }
+                    free(fn[i].body[b].op_value);
+                }
+            }
+            free(fn[i].body);
+        }
+    }
+    free(fn);
+}
+
+// 释放类成员表
+static void free_class_member(ClassMember* mem, int count) {
+    if (!mem) return;
+    for (int i = 0; i < count; i++) {
+        free_wstring(mem[i].name);
+        free_wstring(mem[i].type);
+    }
+    free(mem);
+}
+
+// 释放类表
+static void free_class(ObjClass* cls, int count) {
+    if (!cls) return;
+    for (int i = 0; i < count; i++) {
+        free_wstring(cls[i].name);
+
+        free_class_member(cls[i].pub_sym, cls[i].pub_sym_size);
+        free_class_member(cls[i].pri_sym, cls[i].pri_sym_size);
+        free_class_member(cls[i].pro_sym, cls[i].pro_sym_size);
+
+        free_function(cls[i].pub_fun, cls[i].pub_fun_size);
+        free_function(cls[i].pri_fun, cls[i].pri_fun_size);
+        free_function(cls[i].pro_fun, cls[i].pro_fun_suze);
+    }
+    free(cls);
+}
+
+// 释放整个 ObjectCode
+void freeObjectCode(ObjectCode* code) {
+    if (!code) return;
+
+    free_symbol(code->obj_sym, code->obj_sym_size);
+    free_function(code->obj_fun, code->obj_fun_size);
+    free_class(code->obj_class, code->obj_class_size);
+
+    memset(code, 0, sizeof(ObjectCode));
+}
 
 #endif
