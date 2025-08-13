@@ -18,15 +18,18 @@ typedef enum CompileErrorType {
     ERR_CALL_FUN,                    //调用函数的语法错误
     ERR_QUITE_NOT_CORRECTLY_CLOSE,   //括号未正确闭合
     ERR_FUN_ARGS_SIZE,               //传参个数错误
+    ERR_FUN_ARGS_TYPE,               //参数类型不匹配
 } CompileErrorType;
 typedef enum OPCode {   //操作码
-    OP_PUT_STR,         //输出wchar_t*
+    OP_PUT_STR,         //从栈中输出wchar_t*
+    OP_DEFINE_VAR,      //定义变量,第一个操作数为变量名,第二个为类型
+    OP_PUSH,
 } OPCode;
 typedef struct ObjValue {
-    union {
-        void* ptr_val;
-    } value;
+    void* value;
+    int size;
     enum {
+        TYPE_SYM,
         TYPE_STR,
     } type;
 } ObjValue;
@@ -94,10 +97,80 @@ ObjectCode objCode = {
 };
 
 void stringEscape(wchar* str);
+bool findSymbol(wchar* name, const CheckerSymbol* table, int table_size);
 void freeObjCode(void);
 void compileError(CompileErrorType type, int errLine);
-int ckeckMainFunction(CheckerOutput* IR);   //检查并设置入口点
+int ckeckMainFunction(CheckerOutput* IR);                    //检查并设置入口点
+int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size, wchar** result_type); //分析表达式
 int compile(CheckerOutput*);
+
+int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size, wchar** result_type) {
+    if(exp == NULL) return -1;
+    if(cmd == NULL) return -1;
+    if(exp_size==1) {
+        if(exp->type == TOK_ID) {
+            if(*cmd==NULL) {
+                (*cmd) = (Command*)calloc(1, sizeof(Command));
+                if(!(*cmd)) return -1;
+                *cmd_size = 1;
+            }
+            if(*cmd_size <= *cmd_index) {
+                *cmd_size = *cmd_index+1;
+                void* temp = realloc(*cmd, sizeof(Command)*(*cmd_size));
+                if(temp == NULL) return -1;
+                *cmd = (Command*)temp;
+                memset(&(*cmd)[(*cmd_index)], 0, sizeof(Command));
+            }
+            (*cmd)[(*cmd_index)].op = OP_PUSH;
+            (*cmd)[(*cmd_index)].op_value_size = 1;
+            (*cmd)[(*cmd_index)].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+            if((*cmd)[(*cmd_index)].op_value==NULL) return -1;
+            (*cmd)[(*cmd_index)].op_value[0].type = TYPE_SYM;
+            (*cmd)[(*cmd_index)].op_value[0].value = (wchar*)calloc(wcslen(exp->value)+1, sizeof(wchar));
+            (*cmd)[(*cmd_index)].op_value[0].size = (wcslen(exp->value)+1)*sizeof(wchar);
+            wcscpy((wchar*)((*cmd)[(*cmd_index)].op_value[0].value), exp->value);
+            //写返回类型
+
+
+            (*cmd_index)++;
+            return 0;
+        } else if(exp->type == TOK_VAL) {
+            if(*cmd==NULL) {
+                (*cmd) = (Command*)calloc(1, sizeof(Command));
+                if(!(*cmd)) return -1;
+                *cmd_size = 1;
+            }
+            if(*cmd_size <= *cmd_index) {
+                *cmd_size = *cmd_index+1;
+                void* temp = realloc(*cmd, sizeof(Command)*(*cmd_size));
+                if(temp == NULL) return -1;
+                *cmd = (Command*)temp;
+                memset(&(*cmd)[(*cmd_index)], 0, sizeof(Command));
+            }
+            (*cmd)[(*cmd_index)].op = OP_PUSH;
+            (*cmd)[(*cmd_index)].op_value_size = 1;
+            (*cmd)[(*cmd_index)].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+            if((*cmd)[(*cmd_index)].op_value==NULL) return -1;
+            if(exp->mark==STR) {
+                (*cmd)[(*cmd_index)].op_value[0].type = TYPE_STR;
+                (*cmd)[(*cmd_index)].op_value[0].value = (wchar*)calloc(wcslen(exp->value)+1, sizeof(wchar));
+                (*cmd)[(*cmd_index)].op_value[0].size = (wcslen(exp->value)+1)*sizeof(wchar);
+                wcscpy((wchar*)((*cmd)[(*cmd_index)].op_value[0].value), exp->value);
+                stringEscape((wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
+#ifdef HX_DEBUG
+                printf("%ls\n", (wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
+#endif
+                (*cmd_index)++;
+                return 0;
+            } else {
+
+            }
+        }
+    } else {
+
+    }
+    return 0;
+}
 
 /*编译：
 *分析main函数,仅写入main函数内调用过的函数
@@ -106,6 +179,9 @@ int compile(CheckerOutput* IR) {
     if(ckeckMainFunction(IR)) {
         return 255;
     }
+    CheckerSymbol* local_sym = NULL;
+    int local_sym_size = 0;
+    int sym_index = 0;
     if(mainPtr->args == NULL) {                 //无参main
         if(mainPtr->body == NULL||mainPtr->body_size == 0) {             //空函数不进行任何操作
             //写入空的main函数
@@ -154,18 +230,17 @@ int compile(CheckerOutput* IR) {
             objMainPtr->body_size = 1;
 
             int cmd_index = 0;
-
+//分析函数体
             for(int i = 0; i < mainPtr->body_size; i++) {
                 switch(mainPtr->body[i].type) {
                 case TOK_ID: {
                     if(wcsequ(mainPtr->body[i].value, L"putString") || wcsequ(mainPtr->body[i].value, L"输出字符串")) {
                         if(cmd_index >= objMainPtr->body_size) {
                             objMainPtr->body_size = cmd_index+1;
-                            void* temp = realloc(objMainPtr->body, sizeof(Command)*(mainPtr->body_size));
+                            void* temp = realloc(objMainPtr->body, sizeof(Command)*(objMainPtr->body_size));
                             if(!temp) return -1;
                             objMainPtr->body = (Command*)temp;
-                            objMainPtr->body[cmd_index].op_value = NULL;
-                            objMainPtr->body[cmd_index].op_value_size = 0;
+                            memset(&objMainPtr->body[cmd_index], 0, sizeof(Command));
                         }
                         objMainPtr->body[cmd_index].op_value_size = 1;
                         objMainPtr->body[cmd_index].op = OP_PUT_STR;
@@ -185,116 +260,187 @@ int compile(CheckerOutput* IR) {
                             return 255;
                         }
                         i++;
-                        int arg_value = i;
+                        int exp_start = i;
                         int count = 0;
+                        int open = 1;
+                        int close = 0;
                         while(i < mainPtr->body_size-1) {
-                            if(wcsequ(mainPtr->body[i].value, L")")||wcsequ(mainPtr->body[i].value, L"）")) {
-                                break;
+                            if(wcsequ(mainPtr->body[i].value, L"(")||wcsequ(mainPtr->body[i].value, L"（")) {
+                                open++;
                             }
+                            if(wcsequ(mainPtr->body[i].value, L")")||wcsequ(mainPtr->body[i].value, L"）")) {
+                                close++;
+                            }
+                            if(open == close) break;
                             count++;
                             i++;
                         }
-                        if((!wcsequ(mainPtr->body[i].value, L")"))&&(!wcsequ(mainPtr->body[i].value, L"）"))) {
+                        if(open!=close) {
                             compileError(ERR_QUITE_NOT_CORRECTLY_CLOSE, mainPtr->body[i].lin);
                             return 255;
                         }
-                        if(count == 0) {
-                            compileError(ERR_FUN_ARGS_SIZE, mainPtr->body[i].lin);
+                        int exp_end = i;
+                        if(exp_end-exp_start==0) {
+                            compileError(ERR_FUN_ARGS_SIZE,mainPtr->body[i].lin);
                             return 255;
-                        } else if(count == 1) {
-                            //表面值作参数
-                            if(mainPtr->body[arg_value].type == TOK_VAL) {
-                                objMainPtr->body[cmd_index].op_value[0].value.ptr_val = calloc(wcslen(mainPtr->body[arg_value].value)+1, sizeof(wchar));
-                                if(!(objMainPtr->body[cmd_index].op_value[0].value.ptr_val)) return -1;
-                                wcscpy((wchar*)(objMainPtr->body[cmd_index].op_value[0].value.ptr_val), mainPtr->body[arg_value].value);
-                                stringEscape((wchar*)(objMainPtr->body[cmd_index].op_value[0].value.ptr_val));
-                                //printf("%ls\n", (wchar*)(objMainPtr->body[cmd_index].op_value[0].value.ptr_val));
-                            }
-                        } else {
+                        }
 
+
+                        parseEXP(&(objMainPtr->body), &cmd_index, &(objMainPtr->body_size), &(mainPtr->body[exp_start]), exp_end-exp_start, NULL);
+
+                        if(objMainPtr->body_size <= cmd_index) {
+                            objMainPtr->body_size = cmd_index+1;
+                            void* temp = realloc(objMainPtr->body, objMainPtr->body_size*sizeof(Command));
+                            if(!temp) return -1;
+                            objMainPtr->body = (Command*)temp;
+                        }
+                        memset(&objMainPtr->body[cmd_index], 0, sizeof(Command));
+
+                        if(!(i+1 < mainPtr->body_size)) {
+                            error(ERR_NO_END, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        i++;
+#ifdef HX_DEBUG
+                        printf("%ls\n", mainPtr->body[i].value);
+#endif
+
+                        if(!wcsequ(mainPtr->body[i].value, L";")&&!wcsequ(mainPtr->body[i].value, L"；")) {
+                            error(ERR_NO_END, mainPtr->body[i].lin);
+                            return 255;
                         }
                         cmd_index++;
                     }
                 }
+                break;
+
+                case TOK_KW: {
+                    if(wcsequ(mainPtr->body[i].value, L"var")||wcsequ(mainPtr->body[i].value, L"定义变量")) {
+                        if(local_sym==NULL) {
+                            local_sym = (CheckerSymbol*)calloc(1, sizeof(CheckerSymbol));
+                            if(!local_sym) return -1;
+                            local_sym_size = 1;
+                        }
+                        if(sym_index>= local_sym_size) {
+                            local_sym_size = sym_index+1;
+                            void* temp = realloc(local_sym, local_sym_size*sizeof(CheckerSymbol));
+                            if(!temp) return -1;
+                            local_sym = (CheckerSymbol*)temp;
+                        }
+                        if(!(i+1 < mainPtr->body_size)) {
+                            error(ERR_NO_VAR_NAME, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        i++;
+                        if((!wcsequ(mainPtr->body[i].value, L":"))&&(!wcsequ(mainPtr->body[i].value, L"："))) {
+                            error(ERR_NO_VAR_NAME, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        if(!(i+1 < mainPtr->body_size)) {
+                            error(ERR_NO_VAR_NAME, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        i++;
+                        if(mainPtr->body[i].type != TOK_ID) {
+                            error(ERR_NO_VAR_NAME, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        local_sym[sym_index].isOnlyRead = false;
+                        local_sym[sym_index].name = (wchar*)calloc(wcslen(mainPtr->body[i].value)+1, sizeof(wchar));
+                        if(!(local_sym[sym_index].name)) return -1;
+                        wcscpy(local_sym[sym_index].name, mainPtr->body[i].value);
+                        //变量名
+#ifdef HX_DEBUG
+                        printf("[DEB]varName:%ls\n", local_sym[sym_index].name);
+#endif
+                        if(!(i+1 < mainPtr->body_size)) {
+                            error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        i++;
+                        if(!wcsequ(mainPtr->body[i].value, L",")) {
+                            error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        if(!(i+1 < mainPtr->body_size)) {
+                            error(ERR_SYM_NO_TYPE, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        i++;
+                        if((!wcsequ(mainPtr->body[i].value, L"type"))&&(!wcsequ(mainPtr->body[i].value, L"它的类型是"))) {
+                            error(ERR_SYM_NO_TYPE, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        if(!(i+1 < mainPtr->body_size)) {
+                            error(ERR_SYM_NO_TYPE, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        i++;
+                        if((!wcsequ(mainPtr->body[i].value, L":"))&&(!wcsequ(mainPtr->body[i].value, L"："))) {
+                            error(ERR_SYM_NO_TYPE, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        if(!(i+1 < mainPtr->body_size)) {
+                            error(ERR_SYM_NO_TYPE, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        i++;
+                        if(mainPtr->body[i].type != TOK_ID && mainPtr->body[i].type != TOK_KW) {
+                            error(ERR_SYM_NO_TYPE, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        local_sym[sym_index].type = (wchar*)calloc(wcslen(mainPtr->body[i].value)+1, sizeof(wchar));
+                        if(!(local_sym[sym_index].type)) return -1;
+                        wcscpy(local_sym[sym_index].type, mainPtr->body[i].value);
+                        //类型
+#ifdef HX_DEBUG
+                        printf("[DEB]varType:%ls\n", local_sym[sym_index].type);
+#endif
+                        if(!(i+1 < mainPtr->body_size)) {
+                            error(ERR_NO_END, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        i++;
+                        if(wcsequ(mainPtr->body[i].value, L";")||wcsequ(mainPtr->body[i].value, L"；")) {
+                            sym_index++;
+                            break;
+                        } else {
+
+
+                            sym_index++;
+                        }
+                    }
+                }
+                break;
                 }
             }
         }
     }
     return 0;
 }
-
-/* 彻底释放 ObjectCode 的实现：释放所有动态分配的子成员 */
-// 释放 wchar* 字符串
-static void free_wstring(wchar* s) {
-    if (s) free(s);
-}
-// 释放符号表
-static void free_symbol(ObjSymbol* sym, int count) {
-    if (!sym) return;
-    for (int i = 0; i < count; i++) {
-        free_wstring(sym[i].name);
-        free_wstring(sym[i].type);
-    }
-    free(sym);
-}
-// 释放函数
-static void free_function(ObjFunction* fn, int count) {
-    if (!fn) return;
-    for (int i = 0; i < count; i++) {
-        free_wstring(fn[i].name);
-        free_wstring(fn[i].ret_type);
-        free_symbol(fn[i].args, fn[i].args_size);
-
-        if (fn[i].body) {
-            for (int b = 0; b < fn[i].body_size; b++) {
-                if (fn[i].body[b].op_value) {
-                    for (int v = 0; v < fn[i].body[b].op_value_size; v++) {
-                        if (fn[i].body[b].op_value[v].type == TYPE_STR) {
-                            free_wstring((wchar*)fn[i].body[b].op_value[v].value.ptr_val);
-                        }
-                    }
-                    free(fn[i].body[b].op_value);
-                }
+bool findSymbol(wchar* name, const CheckerSymbol* table, int table_size) {
+    if(name == NULL) return false;
+    if(table==NULL) {
+        if(checkerOutput.global_sym == NULL) {
+            return false;
+        } else {
+            for(int i = 0; i < checkerOutput.global_sym_size; i++) {
+                if(wcsequ(name, checkerOutput.global_sym[i].name)) return true;
             }
-            free(fn[i].body);
+        }
+        return false;
+    }
+    for(int i = 0; i < table_size; i++) {
+        if(wcsequ(name, table[i].name)) return true;
+    }
+    if(checkerOutput.global_sym == NULL) {
+        return false;
+    } else {
+        for(int i = 0; i < checkerOutput.global_sym_size; i++) {
+            if(wcsequ(name, checkerOutput.global_sym[i].name)) return true;
         }
     }
-    free(fn);
-}
-// 释放类成员表
-static void free_class_member(ClassMember* mem, int count) {
-    if (!mem) return;
-    for (int i = 0; i < count; i++) {
-        free_wstring(mem[i].name);
-        free_wstring(mem[i].type);
-    }
-    free(mem);
-}
-// 释放类表
-static void free_class(ObjClass* cls, int count) {
-    if (!cls) return;
-    for (int i = 0; i < count; i++) {
-        free_wstring(cls[i].name);
-
-        free_class_member(cls[i].pub_sym, cls[i].pub_sym_size);
-        free_class_member(cls[i].pri_sym, cls[i].pri_sym_size);
-        free_class_member(cls[i].pro_sym, cls[i].pro_sym_size);
-
-        free_function(cls[i].pub_fun, cls[i].pub_fun_size);
-        free_function(cls[i].pri_fun, cls[i].pri_fun_size);
-        free_function(cls[i].pro_fun, cls[i].pro_fun_suze);
-    }
-    free(cls);
-}
-// 释放整个 ObjectCode
-void freeObjectCode(ObjectCode* code) {
-    if (!code) return;
-
-    free_symbol(code->obj_sym, code->obj_sym_size);
-    free_function(code->obj_fun, code->obj_fun_size);
-    free_class(code->obj_class, code->obj_class_size);
-
-    memset(code, 0, sizeof(ObjectCode));
+    return false;
 }
 int ckeckMainFunction(CheckerOutput* IR) {
     if(IR==NULL) {
@@ -373,6 +519,11 @@ void compileError(CompileErrorType type, int errLine) {
         fwprintf(stderr, L"\33[31m[E]传递给函数的参数的个数有误！(位于第%d行)\33[0m\n", errLine);
     }
     break;
+
+    case ERR_FUN_ARGS_TYPE: {
+        fwprintf(stderr, L"\33[31m[E]传递给函数的参数的类型不匹配！(位于第%d行)\33[0m\n", errLine);
+    }
+    break;
     }
     return;
 }
@@ -405,10 +556,340 @@ void stringEscape(wchar* str) {
                         j++;
                     }
                     continue;
+                } else if(str[i]==L'a') {
+                    i--;
+                    str[i] = L'\a';
+                    i++;
+                    int j = i;
+                    while(str[j]!=L'\0') {
+                        str[j] = str[j+1];
+                        j++;
+                    }
+                    continue;
+                } else if(str[i]==L'3' && str[i+1]==L'3') {
+                    i--;
+                    str[i] = L'\33';
+                    i++;
+                    int j = i;
+                    while(str[j]!=L'\0') {
+                        if(str[j+1]==L'\0') {
+                            str[j] = str[j+1];
+                            break;
+                        }
+                        str[j] = str[j+2];
+                        j++;
+                    }
+                    continue;
                 }
             }
         }
         i++;
     }
+}
+void freeObjectCode(ObjectCode *code) {
+    if (code == NULL) return;
+    /* ---------- 释放全局函数表 ---------- */
+    if (code->obj_fun) {
+        /* obj_fun_size 是 i32 (typedef uint32_t i32)，用 unsigned 循环更稳妥 */
+        for (uint32_t fi = 0; fi < (uint32_t)code->obj_fun_size; ++fi) {
+            ObjFunction *fn = &code->obj_fun[fi];
+            /* 释放函数名与返回类型 */
+            if (fn->name) {
+                free(fn->name);
+                fn->name = NULL;
+            }
+            if (fn->ret_type) {
+                free(fn->ret_type);
+                fn->ret_type = NULL;
+            }
+            /* 释放参数表 */
+            if (fn->args) {
+                for (uint32_t ai = 0; ai < (uint32_t)fn->args_size; ++ai) {
+                    if (fn->args[ai].name) {
+                        free(fn->args[ai].name);
+                        fn->args[ai].name = NULL;
+                    }
+                    if (fn->args[ai].type) {
+                        free(fn->args[ai].type);
+                        fn->args[ai].type = NULL;
+                    }
+                }
+                free(fn->args);
+                fn->args = NULL;
+                fn->args_size = 0;
+            }
+
+            if (fn->body) {
+                for (uint32_t bi = 0; bi < (uint32_t)fn->body_size; ++bi) {
+                    Command *cmd = &fn->body[bi];
+                    if (cmd->op_value) {
+                        for (uint32_t vi = 0; vi < (uint32_t)cmd->op_value_size; ++vi) {
+                            ObjValue *ov = &cmd->op_value[vi];
+                            if (ov->value) {
+                                free(ov->value);
+                                ov->value = NULL;
+                            }
+                            ov->size = 0;
+                        }
+                        free(cmd->op_value);
+                        cmd->op_value = NULL;
+                        cmd->op_value_size = 0;
+                    }
+                }
+                free(fn->body);
+                fn->body = NULL;
+                fn->body_size = 0;
+            }
+        }
+        free(code->obj_fun);
+        code->obj_fun = NULL;
+        code->obj_fun_size = 0;
+    }
+    /* ---------- 释放全局符号表 ---------- */
+    if (code->obj_sym) {
+        for (uint32_t si = 0; si < (uint32_t)code->obj_sym_size; ++si) {
+            if (code->obj_sym[si].name) {
+                free(code->obj_sym[si].name);
+                code->obj_sym[si].name = NULL;
+            }
+            if (code->obj_sym[si].type) {
+                free(code->obj_sym[si].type);
+                code->obj_sym[si].type = NULL;
+            }
+        }
+        free(code->obj_sym);
+        code->obj_sym = NULL;
+        code->obj_sym_size = 0;
+    }
+
+    /* ---------- 释放类表及类内部内容 ---------- */
+    if (code->obj_class) {
+        for (uint32_t ci = 0; ci < (uint32_t)code->obj_class_size; ++ci) {
+            ObjClass *cls = &code->obj_class[ci];
+
+            /* 类名 */
+            if (cls->name) {
+                free(cls->name);
+                cls->name = NULL;
+            }
+
+            /* 成员数组（公/私/保护） */
+            if (cls->pub_sym) {
+                for (int m = 0; m < cls->pub_sym_size; ++m) {
+                    if (cls->pub_sym[m].name) {
+                        free(cls->pub_sym[m].name);
+                        cls->pub_sym[m].name = NULL;
+                    }
+                    if (cls->pub_sym[m].type) {
+                        free(cls->pub_sym[m].type);
+                        cls->pub_sym[m].type = NULL;
+                    }
+                }
+                free(cls->pub_sym);
+                cls->pub_sym = NULL;
+                cls->pub_sym_size = 0;
+            }
+
+            if (cls->pri_sym) {
+                for (int m = 0; m < cls->pri_sym_size; ++m) {
+                    if (cls->pri_sym[m].name) {
+                        free(cls->pri_sym[m].name);
+                        cls->pri_sym[m].name = NULL;
+                    }
+                    if (cls->pri_sym[m].type) {
+                        free(cls->pri_sym[m].type);
+                        cls->pri_sym[m].type = NULL;
+                    }
+                }
+                free(cls->pri_sym);
+                cls->pri_sym = NULL;
+                cls->pri_sym_size = 0;
+            }
+
+            if (cls->pro_sym) {
+                for (int m = 0; m < cls->pro_sym_size; ++m) {
+                    if (cls->pro_sym[m].name) {
+                        free(cls->pro_sym[m].name);
+                        cls->pro_sym[m].name = NULL;
+                    }
+                    if (cls->pro_sym[m].type) {
+                        free(cls->pro_sym[m].type);
+                        cls->pro_sym[m].type = NULL;
+                    }
+                }
+                free(cls->pro_sym);
+                cls->pro_sym = NULL;
+                cls->pro_sym_size = 0;
+            }
+
+            /* 类函数：pub_fun, pri_fun, pro_fun —— 释放逻辑同全局函数 */
+            if (cls->pub_fun) {
+                for (int f = 0; f < cls->pub_fun_size; ++f) {
+                    ObjFunction *fn = &cls->pub_fun[f];
+                    if (fn->name) {
+                        free(fn->name);
+                        fn->name = NULL;
+                    }
+                    if (fn->ret_type) {
+                        free(fn->ret_type);
+                        fn->ret_type = NULL;
+                    }
+
+                    if (fn->args) {
+                        for (int a = 0; a < fn->args_size; ++a) {
+                            if (fn->args[a].name) {
+                                free(fn->args[a].name);
+                                fn->args[a].name = NULL;
+                            }
+                            if (fn->args[a].type) {
+                                free(fn->args[a].type);
+                                fn->args[a].type = NULL;
+                            }
+                        }
+                        free(fn->args);
+                        fn->args = NULL;
+                        fn->args_size = 0;
+                    }
+
+                    if (fn->body) {
+                        for (int b = 0; b < fn->body_size; ++b) {
+                            Command *cmd = &fn->body[b];
+                            if (cmd->op_value) {
+                                for (int v = 0; v < cmd->op_value_size; ++v) {
+                                    if (cmd->op_value[v].value) {
+                                        free(cmd->op_value[v].value);
+                                        cmd->op_value[v].value = NULL;
+                                    }
+                                    cmd->op_value[v].size = 0;
+                                }
+                                free(cmd->op_value);
+                                cmd->op_value = NULL;
+                                cmd->op_value_size = 0;
+                            }
+                        }
+                        free(fn->body);
+                        fn->body = NULL;
+                        fn->body_size = 0;
+                    }
+                }
+                free(cls->pub_fun);
+                cls->pub_fun = NULL;
+                cls->pub_fun_size = 0;
+            }
+
+            if (cls->pri_fun) {
+                for (int f = 0; f < cls->pri_fun_size; ++f) {
+                    ObjFunction *fn = &cls->pri_fun[f];
+                    if (fn->name) {
+                        free(fn->name);
+                        fn->name = NULL;
+                    }
+                    if (fn->ret_type) {
+                        free(fn->ret_type);
+                        fn->ret_type = NULL;
+                    }
+
+                    if (fn->args) {
+                        for (int a = 0; a < fn->args_size; ++a) {
+                            if (fn->args[a].name) {
+                                free(fn->args[a].name);
+                                fn->args[a].name = NULL;
+                            }
+                            if (fn->args[a].type) {
+                                free(fn->args[a].type);
+                                fn->args[a].type = NULL;
+                            }
+                        }
+                        free(fn->args);
+                        fn->args = NULL;
+                        fn->args_size = 0;
+                    }
+
+                    if (fn->body) {
+                        for (int b = 0; b < fn->body_size; ++b) {
+                            Command *cmd = &fn->body[b];
+                            if (cmd->op_value) {
+                                for (int v = 0; v < cmd->op_value_size; ++v) {
+                                    if (cmd->op_value[v].value) {
+                                        free(cmd->op_value[v].value);
+                                        cmd->op_value[v].value = NULL;
+                                    }
+                                    cmd->op_value[v].size = 0;
+                                }
+                                free(cmd->op_value);
+                                cmd->op_value = NULL;
+                                cmd->op_value_size = 0;
+                            }
+                        }
+                        free(fn->body);
+                        fn->body = NULL;
+                        fn->body_size = 0;
+                    }
+                }
+                free(cls->pri_fun);
+                cls->pri_fun = NULL;
+                cls->pri_fun_size = 0;
+            }
+            if (cls->pro_fun) {
+                for (int f = 0; f < cls->pro_fun_suze; ++f) {
+                    ObjFunction *fn = &cls->pro_fun[f];
+                    if (fn->name) {
+                        free(fn->name);
+                        fn->name = NULL;
+                    }
+                    if (fn->ret_type) {
+                        free(fn->ret_type);
+                        fn->ret_type = NULL;
+                    }
+
+                    if (fn->args) {
+                        for (int a = 0; a < fn->args_size; ++a) {
+                            if (fn->args[a].name) {
+                                free(fn->args[a].name);
+                                fn->args[a].name = NULL;
+                            }
+                            if (fn->args[a].type) {
+                                free(fn->args[a].type);
+                                fn->args[a].type = NULL;
+                            }
+                        }
+                        free(fn->args);
+                        fn->args = NULL;
+                        fn->args_size = 0;
+                    }
+
+                    if (fn->body) {
+                        for (int b = 0; b < fn->body_size; ++b) {
+                            Command *cmd = &fn->body[b];
+                            if (cmd->op_value) {
+                                for (int v = 0; v < cmd->op_value_size; ++v) {
+                                    if (cmd->op_value[v].value) {
+                                        free(cmd->op_value[v].value);
+                                        cmd->op_value[v].value = NULL;
+                                    }
+                                    cmd->op_value[v].size = 0;
+                                }
+                                free(cmd->op_value);
+                                cmd->op_value = NULL;
+                                cmd->op_value_size = 0;
+                            }
+                        }
+                        free(fn->body);
+                        fn->body = NULL;
+                        fn->body_size = 0;
+                    }
+                }
+                free(cls->pro_fun);
+                cls->pro_fun = NULL;
+                cls->pro_fun_suze = 0;
+            }
+        }
+        free(code->obj_class);
+        code->obj_class = NULL;
+        code->obj_class_size = 0;
+    }
+    code->start_fun = 0;
+    /* 把剩余内存清零（确保所有计数字段为0） */
+    memset(code, 0, sizeof(ObjectCode));
 }
 #endif

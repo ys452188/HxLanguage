@@ -1,0 +1,8 @@
+Package: hxc
+Version: 1.0
+Section: utils
+Priority: optional
+Architecture: arm64
+Depends: libc6 (>= 2.31)
+Maintainer: HuangXianghan
+Description: HxLanguage的编译器.

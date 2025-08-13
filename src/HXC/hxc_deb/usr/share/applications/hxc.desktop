@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=HxLanguageCompiler
+Comment=My command-line tool
+Exec=hxc
+Icon=icon
+Terminal=true
+Type=Application
+Categories=Utility;

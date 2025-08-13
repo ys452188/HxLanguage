@@ -11,7 +11,7 @@ var,con,fun,for,if,else,while,for,foreach,break,continue,wchar,char,float,double
 ### &ensp;定义变量
 #### &ensp;&ensp;巴克斯范式表示：
 ```BNF
-定义变量 ::= <<"var">|<"定义变量"> <":">|<"："> <标识符> <","> <"type">|<"它的类型是"> <":">|<"："> <关键字>|<标识符>
+定义变量 ::= <"var">|<"定义变量"> <":">|<"："> <标识符> <","> <"type">|<"它的类型是"> <":">|<"："> <关键字>|<标识符>
 ```
 ---
 ### &ensp;定义常量
