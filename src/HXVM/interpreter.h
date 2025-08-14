@@ -2,6 +2,7 @@
 #define HXVM_INTERPRETER_H
 #include "hxLocale.h"
 #include "hsmLoader.h"
+#include "hxSymbolTable.h"
 #include <wchar.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -46,6 +47,34 @@ int interprete() {
                 wprintf(L"%ls", (wchar*)vm.stack[vm.top_stack].value);
             } else {
                 wprintf(L"%ls",PUT_STRING_DISPLAY_NULL? L"（空）":L"\0");
+            }
+        }
+        break;
+
+        case OP_DEFINE_VAR: {
+#ifdef SHOW_HX_DEBUG_DETAIL
+            wprintf(L"\33[33m[DEG]\33[0m解释OP_DEFINE_VAR...\n");
+#endif
+            if(ptr->func->body[i].op_value == NULL) {
+                HXVMError(ERR_NULL_PTR);
+                return -1;
+            }
+            if(ptr->func->body[i].op_value_size != 2) {
+                HXVMError(ERR_NULL_PTR);
+                return -1;
+            }
+            if(ptr->func->body[i].op_value[0].value == NULL || ptr->func->body[i].op_value[1].value == NULL) {
+                HXVMError(ERR_NULL_PTR);
+                return -1;
+            }
+
+            Symbol sym = {0};
+            sym.name = (wchar*)(ptr->func->body[i].op_value[0].value);
+            sym.type = (wchar*)(ptr->func->body[i].op_value[1].value);
+            int err = insert(&sym, &(vm.stackFrame[vm.top_StackFrame-1].localeSymbolTable));
+            if(err) {
+                wprintf(L"\33[31m[E]当符号插入表中时发生了哈希冲突！\33[0m\n");
+                return err;
             }
         }
         break;

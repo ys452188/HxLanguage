@@ -23,7 +23,13 @@ int main(int argc, char** argv) {
     if(pushFunIntoStackFrame(&(hsmCode.obj_fun[hsmCode.start_fun])) == -1) {
         exit(EXIT_FAILURE);
     }
-    interprete();
+    int err = interprete();
+    if(err) {
+        popFunOutOfStackFrame();
+        freeObjectCode(&hsmCode);
+        wprintf(L"\33[31m[E]运行时发生错误！\33[0m");
+        exit(EXIT_FAILURE);
+    }
     popFunOutOfStackFrame();
     freeObjectCode(&hsmCode);
 #ifdef HX_DEBUG

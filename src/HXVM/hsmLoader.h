@@ -23,6 +23,10 @@ typedef struct ObjValue {
     enum {
         TYPE_SYM,
         TYPE_STR,
+        TYPE_DOUBLE,
+        TYPE_FLOAT,
+        TYPE_INT,
+        TYPE_CH,
     } type;
 } ObjValue;
 typedef struct Command {

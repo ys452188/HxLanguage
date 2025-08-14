@@ -31,6 +31,10 @@ typedef struct ObjValue {
     enum {
         TYPE_SYM,
         TYPE_STR,
+        TYPE_DOUBLE,
+        TYPE_FLOAT,
+        TYPE_INT,
+        TYPE_CH,
     } type;
 } ObjValue;
 typedef struct Command {
@@ -95,16 +99,24 @@ ObjectCode objCode = {
     .obj_sym = NULL,
     .obj_fun_size = 0,
 };
+typedef enum ResultType {
+    RESULT_TYPE_STR = 1,
+    RESULT_TYPE_DOUBLE,
+    RESULT_TYPE_FLOAT,
+    RESULT_TYPE_INT,
+    RESULT_TYPE_CH,
+    UNKNOWN,
+} ResultType;
 
 void stringEscape(wchar* str);
 bool findSymbol(wchar* name, const CheckerSymbol* table, int table_size);
 void freeObjCode(void);
 void compileError(CompileErrorType type, int errLine);
 int ckeckMainFunction(CheckerOutput* IR);                    //检查并设置入口点
-int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size, wchar** result_type); //分析表达式
+int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size, ResultType* result_type); //分析表达式
 int compile(CheckerOutput*);
 
-int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size, wchar** result_type) {
+int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size, ResultType* result_type) {
     if(exp == NULL) return -1;
     if(cmd == NULL) return -1;
     if(exp_size==1) {
@@ -158,16 +170,63 @@ int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size
                 wcscpy((wchar*)((*cmd)[(*cmd_index)].op_value[0].value), exp->value);
                 stringEscape((wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
 #ifdef HX_DEBUG
-                printf("%ls\n", (wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
+                //printf("%ls\n", (wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
 #endif
+                if(result_type==NULL) return -1;
+                *result_type = RESULT_TYPE_STR;
                 (*cmd_index)++;
                 return 0;
+            } else if(exp->mark==CH) {
+                (*cmd)[(*cmd_index)].op_value[0].type = TYPE_CH;
+                (*cmd)[(*cmd_index)].op_value[0].value = (wchar*)calloc(1, sizeof(wchar));
+                (*cmd)[(*cmd_index)].op_value[0].size = sizeof(wchar);
+                stringEscape(exp->value);
+                if(exp->value) *((wchar*)(*cmd)[(*cmd_index)].op_value[0].value) = exp->value[0];
+#ifdef HX_DEBUG
+                printf("%lc\n", *((wchar*)((*cmd)[(*cmd_index)].op_value[0].value)));
+#endif
+                if(result_type==NULL) return -1;
+                *result_type = RESULT_TYPE_CH;
+                (*cmd_index)++;
+                return 0;
+            }
+        }
+    } else {
+        if(exp->type == TOK_VAL) {
+            if(*cmd==NULL) {
+                (*cmd) = (Command*)calloc(1, sizeof(Command));
+                if(!(*cmd)) return -1;
+                *cmd_size = 1;
+            }
+            if(*cmd_size <= *cmd_index) {
+                *cmd_size = *cmd_index+1;
+                void* temp = realloc(*cmd, sizeof(Command)*(*cmd_size));
+                if(temp == NULL) return -1;
+                *cmd = (Command*)temp;
+                memset(&(*cmd)[(*cmd_index)], 0, sizeof(Command));
+            }
+            (*cmd)[(*cmd_index)].op = OP_PUSH;
+            (*cmd)[(*cmd_index)].op_value_size = 1;
+            (*cmd)[(*cmd_index)].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+            if((*cmd)[(*cmd_index)].op_value==NULL) return -1;
+            if(exp->mark==STR) {
+                (*cmd)[(*cmd_index)].op_value[0].type = TYPE_STR;
+                (*cmd)[(*cmd_index)].op_value[0].value = (wchar*)calloc(wcslen(exp->value)+1, sizeof(wchar));
+                (*cmd)[(*cmd_index)].op_value[0].size = (wcslen(exp->value)+1)*sizeof(wchar);
+                wcscpy((wchar*)((*cmd)[(*cmd_index)].op_value[0].value), exp->value);
+                stringEscape((wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
+#ifdef HX_DEBUG
+                //printf("%ls\n", (wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
+#endif
+                if(result_type==NULL) return -1;
+                *result_type = RESULT_TYPE_STR;
+
+
+
             } else {
 
             }
         }
-    } else {
-
     }
     return 0;
 }
@@ -179,6 +238,7 @@ int compile(CheckerOutput* IR) {
     if(ckeckMainFunction(IR)) {
         return 255;
     }
+    memset(&objCode, 0, sizeof(ObjectCode));
     CheckerSymbol* local_sym = NULL;
     int local_sym_size = 0;
     int sym_index = 0;
@@ -285,8 +345,13 @@ int compile(CheckerOutput* IR) {
                             return 255;
                         }
 
-
-                        parseEXP(&(objMainPtr->body), &cmd_index, &(objMainPtr->body_size), &(mainPtr->body[exp_start]), exp_end-exp_start, NULL);
+                        ResultType result_type;
+                        int EXPErr = parseEXP(&(objMainPtr->body), &cmd_index, &(objMainPtr->body_size), &(mainPtr->body[exp_start]), exp_end-exp_start, &result_type);
+                        if(EXPErr) return EXPErr;
+                        if(result_type != RESULT_TYPE_STR||result_type==UNKNOWN) {
+                            compileError(ERR_FUN_ARGS_TYPE, mainPtr->body[i].lin);
+                            return 255;
+                        }
 
                         if(objMainPtr->body_size <= cmd_index) {
                             objMainPtr->body_size = cmd_index+1;
@@ -302,7 +367,7 @@ int compile(CheckerOutput* IR) {
                         }
                         i++;
 #ifdef HX_DEBUG
-                        printf("%ls\n", mainPtr->body[i].value);
+                        //printf("%ls\n", mainPtr->body[i].value);
 #endif
 
                         if(!wcsequ(mainPtr->body[i].value, L";")&&!wcsequ(mainPtr->body[i].value, L"；")) {
@@ -350,9 +415,6 @@ int compile(CheckerOutput* IR) {
                         if(!(local_sym[sym_index].name)) return -1;
                         wcscpy(local_sym[sym_index].name, mainPtr->body[i].value);
                         //变量名
-#ifdef HX_DEBUG
-                        printf("[DEB]varName:%ls\n", local_sym[sym_index].name);
-#endif
                         if(!(i+1 < mainPtr->body_size)) {
                             error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, mainPtr->body[i].lin);
                             return 255;
@@ -392,15 +454,36 @@ int compile(CheckerOutput* IR) {
                         local_sym[sym_index].type = (wchar*)calloc(wcslen(mainPtr->body[i].value)+1, sizeof(wchar));
                         if(!(local_sym[sym_index].type)) return -1;
                         wcscpy(local_sym[sym_index].type, mainPtr->body[i].value);
-                        //类型
-#ifdef HX_DEBUG
-                        printf("[DEB]varType:%ls\n", local_sym[sym_index].type);
-#endif
+
                         if(!(i+1 < mainPtr->body_size)) {
                             error(ERR_NO_END, mainPtr->body[i].lin);
                             return 255;
                         }
                         i++;
+                        if(cmd_index >= objMainPtr->body_size) {
+                            objMainPtr->body_size = cmd_index+1;
+                            void* temp = realloc(objMainPtr->body, sizeof(Command)*(objMainPtr->body_size));
+                            if(!temp) return -1;
+                            objMainPtr->body = (Command*)temp;
+                            memset(&objMainPtr->body[cmd_index], 0, sizeof(Command));
+                        }
+                        objMainPtr->body[cmd_index].op = OP_DEFINE_VAR;
+                        objMainPtr->body[cmd_index].op_value = (ObjValue*)calloc(2, sizeof(ObjValue));
+                        objMainPtr->body[cmd_index].op_value_size = 2;
+                        (objMainPtr->body[cmd_index].op_value[0].value) = (wchar*)calloc(wcslen(local_sym[sym_index].name)+1, sizeof(wchar));
+                        if(!(objMainPtr->body[cmd_index].op_value[0].value)) return -1;
+                        wcscpy((wchar*)(objMainPtr->body[cmd_index].op_value[0].value), local_sym[sym_index].name);
+
+                        (objMainPtr->body[cmd_index].op_value[1].value) = (wchar*)calloc(wcslen(local_sym[sym_index].type)+1, sizeof(wchar));
+                        if(!(objMainPtr->body[cmd_index].op_value[1].value)) return -1;
+                        wcscpy((wchar*)(objMainPtr->body[cmd_index].op_value[1].value), local_sym[sym_index].type);
+#ifdef HX_DEBUG
+                        printf("[DEB]varName:%ls\n", (wchar*)(objMainPtr->body[cmd_index].op_value[0].value));
+#endif
+#ifdef HX_DEBUG
+                        printf("[DEB]varType:%ls\n", (wchar*)(objMainPtr->body[cmd_index].op_value[1].value));
+#endif
+                        cmd_index++;
                         if(wcsequ(mainPtr->body[i].value, L";")||wcsequ(mainPtr->body[i].value, L"；")) {
                             sym_index++;
                             break;

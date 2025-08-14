@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "hxLocale.h"
 #include "hsmLoader.h"
+#include "hxSymbolTable.h"
 #define STACK_SIZE_MAX 128
 #define STACK_FRAME_SIZE_MAX 1024
 
@@ -14,16 +15,9 @@ typedef enum HXVMErrorType {
     ERR_STACK_OVERFLOW,         //栈溢出
     ERR_NULL_PTR,               //空指针
 } HXVMErrorType;
-typedef struct Symbol {
-    wchar* name;
-    wchar* type;
-    bool isOnlyRead;
-    void* address;       //地址
-} Symbol;
 typedef struct StackFrame {  //栈帧
     ObjFunction* func;    //指向函数表中的函数
-    Symbol* localeSymbol;    //局部变量
-    int localeSymbolSize;
+    SymbolTable localeSymbolTable;    //局部变量
 } StackFrame;
 typedef struct StackType {
     void* value;
@@ -57,9 +51,10 @@ int pushFunIntoStackFrame(ObjFunction* fun) {
         HXVMError(ERR_STACK_OVERFLOW);
         return -1;
     }
+    memset(&(vm.stackFrame[vm.top_StackFrame]), 0, sizeof(StackFrame));
     vm.stackFrame[vm.top_StackFrame].func = fun;
-    vm.stackFrame[vm.top_StackFrame].localeSymbol = NULL;
-    vm.stackFrame[vm.top_StackFrame].localeSymbolSize = 0;
+    int err = initSymbolTable(&(vm.stackFrame[vm.top_StackFrame].localeSymbolTable));
+    if(err) return err;
 #ifdef SHOW_HX_DEBUG_DETAIL
     printf("\33[33m[DEG]\33[0m函数%ls已入栈(%p).\n", vm.stackFrame[vm.top_StackFrame].func->name, &(vm.stackFrame[vm.top_StackFrame]));
 #endif
@@ -73,24 +68,8 @@ void popFunOutOfStackFrame(void) {
         printf("\33[33m[DEG]\33[0m正在弹出函数%ls...\n",vm.stackFrame[vm.top_StackFrame].func->name);
 #endif
         vm.stackFrame[vm.top_StackFrame].func = NULL;
-        if(vm.stackFrame[vm.top_StackFrame].localeSymbol) {
-            for(int i = 0; i < vm.stackFrame[vm.top_StackFrame].localeSymbolSize; i++) {
-                if(vm.stackFrame[vm.top_StackFrame].localeSymbol[i].name) {
-                    free(vm.stackFrame[vm.top_StackFrame].localeSymbol[i].name);
-                    vm.stackFrame[vm.top_StackFrame].localeSymbol[i].name = NULL;
-                }
-                if(vm.stackFrame[vm.top_StackFrame].localeSymbol[i].type) {
-                    free(vm.stackFrame[vm.top_StackFrame].localeSymbol[i].type);
-                    vm.stackFrame[vm.top_StackFrame].localeSymbol[i].type = NULL;
-                }
-                if(vm.stackFrame[vm.top_StackFrame].localeSymbol[i].address) {
-                    free(vm.stackFrame[vm.top_StackFrame].localeSymbol[i].address);
-                    vm.stackFrame[vm.top_StackFrame].localeSymbol[i].address = NULL;
-                }
-            }
-            free(vm.stackFrame[vm.top_StackFrame].localeSymbol);
-            vm.stackFrame[vm.top_StackFrame].localeSymbol = NULL;
-        }
+        if(vm.stackFrame[vm.top_StackFrame].localeSymbolTable.symbol) free(vm.stackFrame[vm.top_StackFrame].localeSymbolTable.symbol);
+        vm.stackFrame[vm.top_StackFrame].localeSymbolTable.symbol = NULL;
     }
     return;
 }
@@ -113,6 +92,7 @@ void popValueOutOfStack(void) {
 #ifdef SHOW_HX_DEBUG_DETAIL
         printf("\33[33m[DEG]\33[0m正在弹出表面值(%p)...\n",vm.stack[vm.top_stack].value);
 #endif
+        memset(&(vm.stack[vm.top_stack]), 0, sizeof(StackType));
     }
     return;
 }

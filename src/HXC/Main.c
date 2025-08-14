@@ -80,7 +80,9 @@ int main(int argc, char** argv) {
         printf("\t函数名：%ls\n", objCode.obj_fun[i].name);
         printf("\t指令数量：%d\n", objCode.obj_fun[i].body_size);
         printf("}\n");
+        printf("   -----------------------------------------   \n");
     }
+    printf("============================\n");
 #endif
     writeObjectFile("test.hxe");
     wprintf(L"\33[36m[I]已生成目标文件\33[0m\n");
