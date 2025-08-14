@@ -42,12 +42,14 @@ int interprete() {
 #ifdef SHOW_HX_DEBUG_DETAIL
             wprintf(L"\33[33m[DEG]\33[0m解释OP_PUT_STR...\n");
 #endif
-            popValueOutOfStack();
+            vm.top_stack--;
             if(vm.stack[vm.top_stack].value) {
                 wprintf(L"%ls", (wchar*)vm.stack[vm.top_stack].value);
             } else {
                 wprintf(L"%ls",PUT_STRING_DISPLAY_NULL? L"（空）":L"\0");
             }
+            vm.top_stack++;
+            popValueOutOfStack();
         }
         break;
 
