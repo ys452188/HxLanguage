@@ -87,24 +87,49 @@ ObjectCode hsmCode = {0};
 
 /* ---------- 辅助读取函数 ---------- */
 
-static int read_int32(FILE* f, int32_t* out) {
-    if (fread(out, sizeof(int32_t), 1, f) != 1) return -1;
-    return 0;
+// 读取 32 位整数，并将其存储在指针 v 所指向的内存中
+int read_int32(FILE* f, int32_t* v) {
+    if (fread(v, sizeof(*v), 1, f) != 1) {
+        return -1; // 读取失败
+    }
+    // 注意：这里没有进行字节序转换。如果需要，请在此处添加。
+    return 0; // 读取成功
 }
-
-/* 读取 wchar 字符串（先读 i32 len；len<=0 返回 NULL；否则分配 len+1 并读入 len 个 wchar） */
-static wchar_t* read_wstring_alloc(FILE* f) {
+wchar_t* read_wstring_alloc(FILE* f) {
     int32_t len;
-    if (read_int32(f, &len) != 0) return NULL;
-    if (len <= 0) return NULL;
-    wchar_t* buf = (wchar_t*)calloc((size_t)len + 1, sizeof(wchar_t));
-    if (!buf) return NULL;
-    if (fread(buf, sizeof(wchar_t), (size_t)len, f) != (size_t)len) {
+    if (read_int32(f, &len) != 0) {
+        return NULL; // 读取长度失败
+    }
+
+    if (len == 0) {
+        return NULL;
+    }
+
+    // 分配内存以存储 UTF-16 编码的字符
+    uint16_t* buf = (uint16_t*)malloc(len * sizeof(uint16_t));
+    if (buf == NULL) {
+        return NULL;
+    }
+    
+    // 从文件中读取 UTF-16 字符
+    if (fread(buf, sizeof(uint16_t), (size_t)len, f) != (size_t)len) {
         free(buf);
         return NULL;
     }
-    buf[len] = L'\0';
-    return buf;
+    
+    // 将 UTF-16 转换回 wchar_t
+    wchar_t* wstr = (wchar_t*)calloc(len + 1, sizeof(wchar_t));
+    if (wstr == NULL) {
+        free(buf);
+        return NULL;
+    }
+    
+    for (int i = 0; i < len; ++i) {
+        wstr[i] = (wchar_t)buf[i];
+    }
+    
+    free(buf);
+    return wstr;
 }
 
 /* 释放一个 ObjectCode（局部用，安全检查 NULL）——用于出错时清理 tmp */

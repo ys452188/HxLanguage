@@ -11,29 +11,42 @@
 #define hsmCode objCode
 
 /* 写入辅助函数：写 int32，写 wchar*（len + 内容），写 bytes */
-static int write_int32(FILE* f, int32_t v) {
-    if (fwrite(&v, sizeof(int32_t), 1, f) != 1) return -1;
-    return 0;
+#define UTF16_LITTLE_ENDIAN_BOM 0xFFFE
+
+// 写入 32 位整数
+int write_int32(FILE* f, int32_t v) {
+    if (fwrite(&v, sizeof(v), 1, f) != 1) {
+        return -1; // 写入失败
+    }
+    return 0; // 写入成功
 }
+
 static int write_uint32(FILE* f, uint32_t v) {
     if (fwrite(&v, sizeof(uint32_t), 1, f) != 1) return -1;
     return 0;
 }
 
-/* 写 wchar*：先写 i32 len（字符数）；如果 str==NULL 或 len==0 写 0 (读取端视 len<=0 为 NULL) */
-static int write_wstring(FILE* f, const wchar_t* str) {
+// 写入 UTF-16 编码的宽字符串
+int write_wstring(FILE* f, const wchar_t* str) {
     if (str == NULL) {
-        if (write_int32(f, 0) != 0) return -1;
-        return 0;
+        // 写入长度为 0
+        return write_int32(f, 0);
     }
-    long len = (long)wcslen(str);
-    if (len > INT32_MAX) return -1;
-    if (write_int32(f, (int32_t)len) != 0) return -1;
-    if (len > 0) {
-        size_t wrote = fwrite(str, sizeof(wchar_t), (size_t)len, f);
-        if (wrote != (size_t)len) return -1;
+
+    size_t len = wcslen(str);
+    if (write_int32(f, (int32_t)len) != 0) {
+        return -1;
     }
-    return 0;
+
+    // 将 wchar_t 转换为 uint16_t 并写入
+    for (size_t i = 0; i < len; ++i) {
+        uint16_t code_unit = (uint16_t)str[i];
+        if (fwrite(&code_unit, sizeof(uint16_t), 1, f) != 1) {
+            return -1;
+        }
+    }
+
+    return 0; // 写入成功
 }
 
 /* 写入 ObjSymbol */
