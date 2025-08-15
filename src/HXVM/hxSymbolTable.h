@@ -7,7 +7,7 @@
 
 #define HASH_VALUE 2166136261U
 #define PRIME 16777619U
-#define SYMBOL_TABLE_INITIAL_SIZE 16  //符号表初始值
+#define SYMBOL_TABLE_INITIAL_SIZE 32  //符号表初始值
 
 typedef struct Symbol {
     unsigned int hash;
@@ -54,12 +54,13 @@ int insert(Symbol* sym, SymbolTable* table) {
     if(sym == NULL) return -1;
     if(sym->name == NULL || sym->type == NULL) return -1;
     //计算负载因子
-    float loadFactor = (table->sym_count)/(table->size);
+    float loadFactor = (float)table->sym_count / (float)table->size;
     if(loadFactor >= 0.75) {   //利用率过高
         int err = resize(table);
         if(err) return err;
     }
     sym->hash = getHashValue(sym->name);
+    //printf("%u\n", sym->hash);
     int sym_index = (sym->hash)%(table->size);
     if(table->symbol[sym_index].name != NULL) {   //发生哈希碰撞
         int err = resize(table);
@@ -67,6 +68,7 @@ int insert(Symbol* sym, SymbolTable* table) {
     }
 
     table->sym_count++;
+    table->symbol[sym_index].hash = sym->hash;
     table->symbol[sym_index].name = sym->name;
     table->symbol[sym_index].type = sym->type;
     table->symbol[sym_index].address = sym->address;
@@ -83,7 +85,10 @@ int resize(SymbolTable* table) {
     if(!temp) return -1;
     for(int i = 0; i < table->size; i++) {
         if(table->symbol[i].name) {
-            int new_index = (table->symbol[i].hash)/new_size;
+            //printf("%ls\n", table->symbol[i].name);
+            //printf("hash:%u\n", table->symbol[i].hash);
+            int new_index = (table->symbol[i].hash)%new_size;
+            //printf("index:%d\n",new_index);
 
             temp[new_index].name = table->symbol[i].name;
             temp[new_index].type = table->symbol[i].type;
