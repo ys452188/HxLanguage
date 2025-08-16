@@ -19,11 +19,15 @@ typedef enum CompileErrorType {
     ERR_QUITE_NOT_CORRECTLY_CLOSE,   //括号未正确闭合
     ERR_FUN_ARGS_SIZE,               //传参个数错误
     ERR_FUN_ARGS_TYPE,               //参数类型不匹配
+    ERR_VAR_REPEAT_DEFINE,           //变量重复定义
+    ERR_SYM_NOT_DEFINED,             //变量未定义
+    ERR_EXP,                         //错误的表达式
 } CompileErrorType;
 typedef enum OPCode {   //操作码
     OP_PUT_STR,         //从栈中输出wchar_t*
     OP_DEFINE_VAR,      //定义变量,第一个操作数为变量名,第二个为类型
     OP_PUSH,
+    OP_ADD,
 } OPCode;
 typedef struct ObjValue {
     void* value;
@@ -99,24 +103,30 @@ ObjectCode objCode = {
     .obj_sym = NULL,
     .obj_fun_size = 0,
 };
-typedef enum ResultType {
-    RESULT_TYPE_STR = 1,
-    RESULT_TYPE_DOUBLE,
-    RESULT_TYPE_FLOAT,
-    RESULT_TYPE_INT,
-    RESULT_TYPE_CH,
-    UNKNOWN,
+typedef union ResultType {
+    enum {
+        RESULT_TYPE_STR = 1,
+        RESULT_TYPE_DOUBLE,
+        RESULT_TYPE_FLOAT,
+        RESULT_TYPE_INT,
+        RESULT_TYPE_CH,
+        UNKNOWN,
+    } type;
+    wchar* type_unknown;
 } ResultType;
 
 void stringEscape(wchar* str);
-bool findSymbol(wchar* name, const CheckerSymbol* table, int table_size);
+bool findSymbol(wchar* name, const CheckerSymbol** table, int table_size, CheckerSymbol** ptr);
+ResultType parseType(wchar* str);
+int allocOpValueByType(const ResultType* type, void** ptr);
+int setValueByType(const ResultType* type, const wchar* str, void** ptr);
 void freeObjCode(void);
 void compileError(CompileErrorType type, int errLine);
 int ckeckMainFunction(CheckerOutput* IR);                    //检查并设置入口点
-int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size, ResultType* result_type); //分析表达式
+int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size, ResultType* result_type, CheckerSymbol** table, int table_size); //分析表达式
 int compile(CheckerOutput*);
 
-int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size, ResultType* result_type) {
+int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size, ResultType* result_type, CheckerSymbol** table, int table_size) {
     if(exp == NULL) return -1;
     if(cmd == NULL) return -1;
     if(exp_size==1) {
@@ -132,6 +142,12 @@ int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size
                 if(temp == NULL) return -1;
                 *cmd = (Command*)temp;
                 memset(&(*cmd)[(*cmd_index)], 0, sizeof(Command));
+            }
+            CheckerSymbol* ptr = NULL;
+            //检查符号是否存在
+            if(!findSymbol(exp->value, table, table_size, &ptr)||ptr==NULL) {
+                compileError(ERR_SYM_NOT_DEFINED, exp->lin);
+                return 255;
             }
             (*cmd)[(*cmd_index)].op = OP_PUSH;
             (*cmd)[(*cmd_index)].op_value_size = 1;
@@ -159,6 +175,8 @@ int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size
                 *cmd = (Command*)temp;
                 memset(&(*cmd)[(*cmd_index)], 0, sizeof(Command));
             }
+
+            //生成OP_PUSH指令
             (*cmd)[(*cmd_index)].op = OP_PUSH;
             (*cmd)[(*cmd_index)].op_value_size = 1;
             (*cmd)[(*cmd_index)].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
@@ -173,26 +191,69 @@ int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size
                 //printf("%ls\n", (wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
 #endif
                 if(result_type==NULL) return -1;
-                *result_type = RESULT_TYPE_STR;
+                result_type->type = RESULT_TYPE_STR;
                 (*cmd_index)++;
                 return 0;
             } else if(exp->mark==CH) {
                 (*cmd)[(*cmd_index)].op_value[0].type = TYPE_CH;
                 (*cmd)[(*cmd_index)].op_value[0].value = (wchar*)calloc(1, sizeof(wchar));
                 (*cmd)[(*cmd_index)].op_value[0].size = sizeof(wchar);
-                stringEscape(exp->value);
-                if(exp->value) *((wchar*)(*cmd)[(*cmd_index)].op_value[0].value) = exp->value[0];
+                if(exp->value) {
+                    stringEscape(exp->value);
+                    *((wchar*)(*cmd)[(*cmd_index)].op_value[0].value) = exp->value[0];
+                }
 #ifdef HX_DEBUG
                 printf("%lc\n", *((wchar*)((*cmd)[(*cmd_index)].op_value[0].value)));
 #endif
                 if(result_type==NULL) return -1;
-                *result_type = RESULT_TYPE_CH;
+                result_type->type = RESULT_TYPE_CH;
+                (*cmd_index)++;
+                return 0;
+            } else {
+#ifdef HX_DEBUG
+                printf("%ls\n", exp->value);
+#endif
+                *result_type=parseType(exp->value);   //分析表面值的类型
+                if(result_type->type!=UNKNOWN) {
+                    (*cmd)[(*cmd_index)].op_value[0].type = result_type->type;
+                    switch (result_type->type) {
+                    case RESULT_TYPE_INT:
+                        (*cmd)[(*cmd_index)].op_value[0].type = TYPE_INT;
+                        break;
+                    case RESULT_TYPE_FLOAT:
+                        (*cmd)[(*cmd_index)].op_value[0].type = TYPE_FLOAT;
+                        break;
+                    case RESULT_TYPE_DOUBLE:
+                        (*cmd)[(*cmd_index)].op_value[0].type = TYPE_DOUBLE;
+                        break;
+
+                    default:
+                        // 处理未知类型错误
+                        compileError(ERR_EXP, exp->lin);
+                        return 255;
+                    }
+                    int err = allocOpValueByType(result_type, &((*cmd)[(*cmd_index)].op_value[0].value));
+                    if(err) return err;
+                    err = setValueByType(result_type, exp->value, &((*cmd)[(*cmd_index)].op_value[0].value));
+                    if(err) return err;
+#ifdef HX_DEBUG
+                    printf("%ld\n", *(long int*)((*cmd)[(*cmd_index)].op_value[0].value));
+#endif
+                } else {
+                    compileError(ERR_EXP, exp->lin);
+                    return 255;
+                }
+
                 (*cmd_index)++;
                 return 0;
             }
         }
     } else {
-        if(exp->type == TOK_VAL) {
+        int exp_index = 0;
+#ifdef HX_DEBUG
+        printf("正在分析多重运算...\n");
+#endif
+        if(exp[exp_index].type == TOK_VAL) {
             if(*cmd==NULL) {
                 (*cmd) = (Command*)calloc(1, sizeof(Command));
                 if(!(*cmd)) return -1;
@@ -205,26 +266,85 @@ int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size
                 *cmd = (Command*)temp;
                 memset(&(*cmd)[(*cmd_index)], 0, sizeof(Command));
             }
+            //生成OP_PUSH指令
             (*cmd)[(*cmd_index)].op = OP_PUSH;
             (*cmd)[(*cmd_index)].op_value_size = 1;
             (*cmd)[(*cmd_index)].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
             if((*cmd)[(*cmd_index)].op_value==NULL) return -1;
-            if(exp->mark==STR) {
+            if(exp[exp_index].mark==STR) {
                 (*cmd)[(*cmd_index)].op_value[0].type = TYPE_STR;
-                (*cmd)[(*cmd_index)].op_value[0].value = (wchar*)calloc(wcslen(exp->value)+1, sizeof(wchar));
-                (*cmd)[(*cmd_index)].op_value[0].size = (wcslen(exp->value)+1)*sizeof(wchar);
-                wcscpy((wchar*)((*cmd)[(*cmd_index)].op_value[0].value), exp->value);
+                (*cmd)[(*cmd_index)].op_value[0].value = (wchar*)calloc(wcslen(exp[exp_index].value)+1, sizeof(wchar));
+                (*cmd)[(*cmd_index)].op_value[0].size = (wcslen(exp[exp_index].value)+1)*sizeof(wchar);
+                wcscpy((wchar*)((*cmd)[(*cmd_index)].op_value[0].value), exp[exp_index].value);
                 stringEscape((wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
 #ifdef HX_DEBUG
-                //printf("%ls\n", (wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
+                printf("生成指令[%d]：OP_PUSH %ls\n", *cmd_index, (wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
 #endif
                 if(result_type==NULL) return -1;
-                *result_type = RESULT_TYPE_STR;
-
-
-
+                //确定结果类型
+                result_type->type = RESULT_TYPE_STR;
             } else {
 
+            }
+            (*cmd_index)++;
+            //分析下一运算符
+            if(exp_index+1>=exp_size) {  //合法？ 结束
+                return 0;
+            }
+parse_exp:
+            exp_index++;
+            if(wcsequ(exp[exp_index].value, L"+")) {   //val+val
+                if(exp_index+1>=exp_size) {
+                    compileError(ERR_EXP, exp[exp_index].lin);
+                    return 255;
+                }
+                exp_index++;
+                if(exp[exp_index].type==TOK_VAL) {
+                    if(*cmd_size <= *cmd_index) {
+                        *cmd_size = *cmd_index+1;
+                        void* temp = realloc(*cmd, sizeof(Command)*(*cmd_size));
+                        if(temp == NULL) return -1;
+                        *cmd = (Command*)temp;
+                        memset(&(*cmd)[(*cmd_index)], 0, sizeof(Command));
+                    }
+#ifdef HX_DEBUG
+                    //printf("%ls\n", exp[exp_index].value);
+#endif
+//生成OP_PUSH指令
+                    (*cmd)[(*cmd_index)].op = OP_PUSH;
+                    (*cmd)[(*cmd_index)].op_value_size = 1;
+                    (*cmd)[(*cmd_index)].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+                    if((*cmd)[(*cmd_index)].op_value==NULL) return -1;
+                    if(exp[exp_index].mark==STR) {
+                        (*cmd)[(*cmd_index)].op_value[0].type = TYPE_STR;
+                        (*cmd)[(*cmd_index)].op_value[0].value = (wchar*)calloc(wcslen(exp[exp_index].value)+1, sizeof(wchar));
+                        (*cmd)[(*cmd_index)].op_value[0].size = (wcslen(exp[exp_index].value)+1)*sizeof(wchar);
+                        wcscpy((wchar*)((*cmd)[(*cmd_index)].op_value[0].value), exp[exp_index].value);
+                        stringEscape((wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
+#ifdef HX_DEBUG
+                        printf("生成指令[%d]：OP_PUSH %ls\n", *cmd_index, (wchar*)((*cmd)[(*cmd_index)].op_value[0].value));
+#endif
+                        if(result_type==NULL) return -1;
+                        //确定结果类型
+                        result_type->type = RESULT_TYPE_STR;
+                    }
+                    (*cmd_index)++;
+                } else {
+
+                }
+                if(*cmd_size <= *cmd_index) {
+                    *cmd_size = *cmd_index+1;
+                    void* temp = realloc(*cmd, sizeof(Command)*(*cmd_size));
+                    if(temp == NULL) return -1;
+                    *cmd = (Command*)temp;
+                    memset(&(*cmd)[(*cmd_index)], 0, sizeof(Command));
+                }
+                (*cmd)[(*cmd_index)].op = OP_ADD;
+#ifdef HX_DEBUG
+                printf("生成指令[%d]：OP_ADD \n", *cmd_index);
+#endif
+                (*cmd_index)++;
+                goto parse_exp;
             }
         }
     }
@@ -295,17 +415,6 @@ int compile(CheckerOutput* IR) {
                 switch(mainPtr->body[i].type) {
                 case TOK_ID: {
                     if(wcsequ(mainPtr->body[i].value, L"putString") || wcsequ(mainPtr->body[i].value, L"输出字符串")) {
-                        if(cmd_index >= objMainPtr->body_size) {
-                            objMainPtr->body_size = cmd_index+1;
-                            void* temp = realloc(objMainPtr->body, sizeof(Command)*(objMainPtr->body_size));
-                            if(!temp) return -1;
-                            objMainPtr->body = (Command*)temp;
-                            memset(&objMainPtr->body[cmd_index], 0, sizeof(Command));
-                        }
-                        objMainPtr->body[cmd_index].op_value_size = 1;
-                        objMainPtr->body[cmd_index].op = OP_PUT_STR;
-                        objMainPtr->body[cmd_index].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
-                        objMainPtr->body[cmd_index].op_value[0].type = TYPE_STR;
                         if(i+1 >= mainPtr->body_size) {
                             compileError(ERR_CALL_FUN, mainPtr->body[i].lin);
                             return 255;
@@ -344,15 +453,29 @@ int compile(CheckerOutput* IR) {
                             compileError(ERR_FUN_ARGS_SIZE,mainPtr->body[i].lin);
                             return 255;
                         }
-
-                        ResultType result_type;
-                        int EXPErr = parseEXP(&(objMainPtr->body), &cmd_index, &(objMainPtr->body_size), &(mainPtr->body[exp_start]), exp_end-exp_start, &result_type);
+                        //分析参数
+                        ResultType result_type = {0};
+                        int EXPErr = parseEXP(&(objMainPtr->body), &cmd_index, &(objMainPtr->body_size), &(mainPtr->body[exp_start]), exp_end-exp_start, &result_type, &local_sym, local_sym_size);
                         if(EXPErr) return EXPErr;
-                        if(result_type != RESULT_TYPE_STR||result_type==UNKNOWN) {
+                        if(result_type.type != RESULT_TYPE_STR||result_type.type==UNKNOWN) {
                             compileError(ERR_FUN_ARGS_TYPE, mainPtr->body[i].lin);
                             return 255;
                         }
-
+                        //生成指令OP_PUT_STR
+                        if(cmd_index >= objMainPtr->body_size) {
+                            objMainPtr->body_size = cmd_index+1;
+                            void* temp = realloc(objMainPtr->body, sizeof(Command)*(objMainPtr->body_size));
+                            if(!temp) return -1;
+                            objMainPtr->body = (Command*)temp;
+                            memset(&objMainPtr->body[cmd_index], 0, sizeof(Command));
+                        }
+                        objMainPtr->body[cmd_index].op_value_size = 1;
+                        objMainPtr->body[cmd_index].op = OP_PUT_STR;
+                        objMainPtr->body[cmd_index].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+                        objMainPtr->body[cmd_index].op_value[0].type = TYPE_STR;
+#ifdef HX_DEBUG
+                        printf("生成指令[%d]：OP_PUT_STR \n", cmd_index);
+#endif
                         if(objMainPtr->body_size <= cmd_index) {
                             objMainPtr->body_size = cmd_index+1;
                             void* temp = realloc(objMainPtr->body, objMainPtr->body_size*sizeof(Command));
@@ -408,6 +531,12 @@ int compile(CheckerOutput* IR) {
                         i++;
                         if(mainPtr->body[i].type != TOK_ID) {
                             error(ERR_NO_VAR_NAME, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        CheckerSymbol* ptr = NULL;
+                        //检查是否重复定义
+                        if(findSymbol(mainPtr->body[i].value, &local_sym, local_sym_size, &ptr)) {
+                            compileError(ERR_VAR_REPEAT_DEFINE, mainPtr->body[i].lin);
                             return 255;
                         }
                         local_sym[sym_index].isOnlyRead = false;
@@ -467,6 +596,7 @@ int compile(CheckerOutput* IR) {
                             objMainPtr->body = (Command*)temp;
                             memset(&objMainPtr->body[cmd_index], 0, sizeof(Command));
                         }
+
                         objMainPtr->body[cmd_index].op = OP_DEFINE_VAR;
                         objMainPtr->body[cmd_index].op_value = (ObjValue*)calloc(2, sizeof(ObjValue));
                         objMainPtr->body[cmd_index].op_value_size = 2;
@@ -501,29 +631,92 @@ int compile(CheckerOutput* IR) {
     }
     return 0;
 }
-bool findSymbol(wchar* name, const CheckerSymbol* table, int table_size) {
-    if(name == NULL) return false;
-    if(table==NULL) {
-        if(checkerOutput.global_sym == NULL) {
-            return false;
-        } else {
-            for(int i = 0; i < checkerOutput.global_sym_size; i++) {
-                if(wcsequ(name, checkerOutput.global_sym[i].name)) return true;
+bool findSymbol(wchar* name, const CheckerSymbol** table, int table_size, CheckerSymbol** ptr) {
+    if (name == NULL) return false;
+    //printf("%ls\n",name);
+    /* 如果传入的 table 指针本身为空 -> 直接查全局或返回 false */
+    if (table == NULL) {
+        if (checkerOutput.global_sym == NULL) return false;
+        for (int i = 0; i < checkerOutput.global_sym_size; ++i) {
+            /* guard: 确保 global_sym[i].name 非空 */
+            if (checkerOutput.global_sym[i].name == NULL) continue;
+            if (wcsequ(name, checkerOutput.global_sym[i].name)) {
+                if(ptr!=NULL) {
+                    *ptr = &(checkerOutput.global_sym[i]);
+                }
+                return true;
             }
         }
         return false;
     }
-    for(int i = 0; i < table_size; i++) {
-        if(wcsequ(name, table[i].name)) return true;
-    }
-    if(checkerOutput.global_sym == NULL) {
+
+    /* 如果*table 为 NULL 或 table_size <= 0，则退回查找全局符号表 */
+    if (*table == NULL || table_size <= 0) {
+        if (checkerOutput.global_sym == NULL) return false;
+        for (int i = 0; i < checkerOutput.global_sym_size; ++i) {
+            if (checkerOutput.global_sym[i].name == NULL) continue;
+            if (wcsequ(name, checkerOutput.global_sym[i].name)) {
+                if(ptr!=NULL) {
+                    *ptr = &(checkerOutput.global_sym[i]);
+                }
+                return true;
+            }
+        }
         return false;
-    } else {
-        for(int i = 0; i < checkerOutput.global_sym_size; i++) {
-            if(wcsequ(name, checkerOutput.global_sym[i].name)) return true;
+    }
+
+    /* 查找局部表（注意每个条目要判空） */
+    for (int i = 0; i < table_size-1; ++i) {
+        const CheckerSymbol *entry = &((*table)[i]);
+        if (entry == NULL) continue;            /* defensive */
+        if (entry->name == NULL) continue;      /* 很重要：不要把 NULL 传给 wcsequ */
+        if (wcsequ(name, entry->name)) {
+            if(ptr!=NULL) {
+                *ptr = entry;
+            }
+            return true;
+        }
+    }
+
+    /* 最后再查一遍全局符号（按原逻辑） */
+    if (checkerOutput.global_sym == NULL) return false;
+    for (int i = 0; i < checkerOutput.global_sym_size; ++i) {
+        if (checkerOutput.global_sym[i].name == NULL) continue;
+        if (wcsequ(name, checkerOutput.global_sym[i].name)) {
+            if(ptr!=NULL) {
+                *ptr = &(checkerOutput.global_sym[i]);
+            }
+            return true;
         }
     }
     return false;
+}
+ResultType parseType(wchar* str) {
+    ResultType type = {0};
+    type.type = UNKNOWN;
+    if(str==NULL) return type;
+    if(wcslen(str)==0) return type;
+    int index = 0;
+    if(str[0]!=L'\0') {
+        if(str[0]==L'0'&&str[1]==L'x') {
+            type.type = RESULT_TYPE_INT;
+            return type;
+        }
+    }
+    while(str[index]!=L'\0') {
+        index++;
+        if(str[index]==L'.') {
+            while(str[index+1]!=L'\0') index++;
+            if(str[index] == L'f'||str[index] == L'F') {
+                type.type = RESULT_TYPE_FLOAT;
+            } else {
+                type.type = RESULT_TYPE_DOUBLE;
+            }
+            return type;
+        }
+    }
+    type.type = RESULT_TYPE_INT;
+    return type;
 }
 int ckeckMainFunction(CheckerOutput* IR) {
     if(IR==NULL) {
@@ -567,6 +760,49 @@ int ckeckMainFunction(CheckerOutput* IR) {
         return 255;
     }
 }
+int allocOpValueByType(const ResultType* type, void** ptr) {
+    if(ptr==NULL||type==NULL) return -1;
+    switch(type->type) {
+    case RESULT_TYPE_INT: {
+        (*ptr) = (long int*)calloc(1, sizeof(long int));      //程序运行到这里时出现异常
+        if(!(*ptr)) return -1;
+    }
+    break;
+    case RESULT_TYPE_FLOAT: {
+        *ptr = calloc(1, sizeof(float));
+        if(!(*ptr)) return -1;
+    }
+    break;
+    case RESULT_TYPE_DOUBLE: {
+        *ptr = calloc(1, sizeof(double));
+        if(!(*ptr)) return -1;
+    }
+    break;
+    }
+    return 0;
+}
+int setValueByType(const ResultType* type, const wchar* str, void** ptr) {
+    if((!type)||(!str)||!ptr) return -1;
+    if(!(*ptr)) return -1;
+    wchar* end = NULL;
+    switch(type->type) {
+    case RESULT_TYPE_INT: {
+        *(long int*)(*ptr) = wcstol(str,&end, 0);
+    }
+    break;
+
+    case RESULT_TYPE_DOUBLE: {
+        *(double*)(*ptr) = wcstod(str,&end);
+    }
+    break;
+
+    case RESULT_TYPE_FLOAT: {
+        *(float*)(*ptr) = (float)wcstod(str,&end);
+    }
+    break;
+    }
+    return 0;
+}
 void compileError(CompileErrorType type, int errLine) {
     initLocale();
     switch(type) {
@@ -605,6 +841,21 @@ void compileError(CompileErrorType type, int errLine) {
 
     case ERR_FUN_ARGS_TYPE: {
         fwprintf(stderr, L"\33[31m[E]传递给函数的参数的类型不匹配！(位于第%d行)\33[0m\n", errLine);
+    }
+    break;
+
+    case ERR_VAR_REPEAT_DEFINE: {
+        fwprintf(stderr, L"\33[31m[E]变量重复定义！(位于第%d行)\33[0m\n", errLine);
+    }
+    break;
+
+    case ERR_SYM_NOT_DEFINED: {
+        fwprintf(stderr, L"\33[31m[E]符号未定义！(位于第%d行)\33[0m\n", errLine);
+    }
+    break;
+
+    case ERR_EXP: {
+        fwprintf(stderr, L"\33[31m[E]错误的表达式！(位于第%d行)\33[0m\n", errLine);
     }
     break;
     }

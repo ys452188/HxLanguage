@@ -1,7 +1,7 @@
 //版本 1
 #pragma pack(1)     //取消结构体对齐
 #define HX_DEBUG                     //定义这个宏显示调示信息
-#define SHOW_HX_DEBUG_DETAIL         //定义这个宏显示调示细节
+//#define SHOW_HX_DEBUG_DETAIL         //定义这个宏显示调示细节
 #define PUT_STRING_DISPLAY_NULL 1    //定义这个宏设置显示空字符
 #include <stdio.h>
 #include <time.h>
@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
     if(err) {
         popFunOutOfStackFrame();
         freeObjectCode(&hsmCode);
-        wprintf(L"\33[31m[E]运行时发生错误！\33[0m");
+        wprintf(L"\33[31m[E]异常终止。\33[0m");
         exit(EXIT_FAILURE);
     }
     popFunOutOfStackFrame();

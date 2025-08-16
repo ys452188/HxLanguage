@@ -95,6 +95,7 @@ int setTokens(void) {
             wcsncpy(tokens[tokenIndex].value,start,valueLength);
             tokens[tokenIndex].type = TOK_VAL;
             tokens[tokenIndex].lin = lin;
+            tokens[tokenIndex].mark = -1;
             //printf("%ls\n",tokens[tokenIndex].value);
             tokenIndex++;
         } else if(*p == L'\"' || *p == L'“' ||*p == L'”') {    //字符串

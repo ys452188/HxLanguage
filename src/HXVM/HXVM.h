@@ -21,13 +21,13 @@ typedef struct StackFrame {  //栈帧
 } StackFrame;
 typedef struct StackType {
     void* value;
+    bool isAlloc;   //是否是运行时分配的内存
     enum {
         STR = 1,
         INT,
         FLOAT,
         DOUBLE,
         CHAR,
-        WCHAR,
     } type;
 } StackType;
 typedef struct HXVM {
@@ -92,6 +92,9 @@ void popValueOutOfStack(void) {
 #ifdef SHOW_HX_DEBUG_DETAIL
         printf("\33[33m[DEG]\33[0m正在弹出表面值(%p)...\n",vm.stack[vm.top_stack].value);
 #endif
+        if(vm.stack[vm.top_stack].isAlloc) {
+            free(vm.stack[vm.top_stack].value);
+        }
         memset(&(vm.stack[vm.top_stack]), 0, sizeof(StackType));
     }
     return;

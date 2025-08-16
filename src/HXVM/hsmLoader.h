@@ -16,6 +16,7 @@ typedef enum OPCode {   //操作码
     OP_PUT_STR,         //从栈中输出wchar_t*
     OP_DEFINE_VAR,      //定义变量,第一个操作数为变量名,第二个为类型
     OP_PUSH,
+    OP_ADD,
 } OPCode;
 typedef struct ObjValue {
     void* value;
@@ -110,24 +111,24 @@ wchar_t* read_wstring_alloc(FILE* f) {
     if (buf == NULL) {
         return NULL;
     }
-    
+
     // 从文件中读取 UTF-16 字符
     if (fread(buf, sizeof(uint16_t), (size_t)len, f) != (size_t)len) {
         free(buf);
         return NULL;
     }
-    
+
     // 将 UTF-16 转换回 wchar_t
     wchar_t* wstr = (wchar_t*)calloc(len + 1, sizeof(wchar_t));
     if (wstr == NULL) {
         free(buf);
         return NULL;
     }
-    
+
     for (int i = 0; i < len; ++i) {
         wstr[i] = (wchar_t)buf[i];
     }
-    
+
     free(buf);
     return wstr;
 }
