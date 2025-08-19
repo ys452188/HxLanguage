@@ -17,6 +17,9 @@ typedef enum OPCode {   //操作码
     OP_DEFINE_VAR,      //定义变量,第一个操作数为变量名,第二个为类型
     OP_PUSH,
     OP_ADD,
+    OP_SUB,   //减
+    OP_MUL,
+    OP_DIV,   //除
 } OPCode;
 typedef struct ObjValue {
     void* value;

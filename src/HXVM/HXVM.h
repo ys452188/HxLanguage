@@ -24,9 +24,9 @@ typedef struct StackType {
     bool isAlloc;   //是否是运行时分配的内存
     enum {
         STR = 1,
-        INT,
-        FLOAT,
         DOUBLE,
+        FLOAT,
+        INT,
         CHAR,
     } type;
 } StackType;

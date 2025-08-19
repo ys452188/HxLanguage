@@ -23,6 +23,7 @@ int main(int argc, char** argv) {
     if(pushFunIntoStackFrame(&(hsmCode.obj_fun[hsmCode.start_fun])) == -1) {
         exit(EXIT_FAILURE);
     }
+
     int err = interprete();
     if(err) {
         popFunOutOfStackFrame();

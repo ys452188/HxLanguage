@@ -5,7 +5,7 @@
 # 语法 
 关键字：
 ```text
-var,con,fun,for,if,else,while,for,foreach,break,continue,wchar,char,float,double,switch,case,class,using,false,true,定义变量,定义常量,定义函数,如果,否则,整型,浮点型,字符型,宽字符型,精确浮点型
+var,con,fun,if,else,while,for,break,continue,char,float,double,switch,case,class,using,false,true,type,parent,它的类型是,它的父类是,定义变量,定义常量,定义类,定义函数,如果,否则,整型,浮点型,字符型,精确浮点型
 ```
 ---
 ### &ensp;定义变量
@@ -27,5 +27,4 @@ var,con,fun,for,if,else,while,for,foreach,break,continue,wchar,char,float,double
 ```
 ---
 # 目标文件
-* 魔数：0x48584F424A
 * 后缀：.hxe

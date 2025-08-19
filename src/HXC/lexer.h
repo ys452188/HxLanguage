@@ -226,7 +226,7 @@ bool isOperator(const wchar ch) {
     return(ch==L','||ch==L'。'||ch==L';'||ch==L'；'||ch==L'\"'||ch==L'“'||ch==L'”'||ch==L'\''||ch==L'‘'||ch==L'’'
            ||ch==L'*'||ch==L'+'||ch==L'-'||ch==L'/'||ch==L'\\'||ch==L'|'||ch==L'^'||ch==L'<'||ch==L'>'||ch==L'%'||ch==L'&'
            ||ch==L')'||ch==L'('||ch==L'{'||ch==L'}'||ch==L'!'||ch==L'！'||ch==L'?' || ch == L'？' || ch == L'.'||ch==L':'||ch==L'：'||
-           ch==L'='||ch == L'[' || ch == L']' || ch == L'（'|| ch == L'）'|| ch == L'［'|| ch == L'］') ;
+           ch==L'='||ch == L'[' || ch == L']' || ch == L'（'|| ch == L'）'|| ch == L'［'|| ch == L'］'|| ch == L'×' || ch==L'÷') ;
 }
 void freeSrc(void) {
     if(src) {
