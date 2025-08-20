@@ -14,6 +14,7 @@ long int interprete_commands_size = 0;
 #endif
 
 int interprete_OP_ADD();
+int interprete_OP_MUL();
 int interprete();
 
 int interprete() {
@@ -92,6 +93,11 @@ int interprete() {
         case OP_ADD: {
             int err = interprete_OP_ADD();
             if(err) return err;
+        }
+        break;
+
+        case OP_MUL: {
+
         }
         break;
 
@@ -271,7 +277,71 @@ int interprete_OP_ADD() {
         vm.stack[vm.top_stack].type = DOUBLE;
         vm.top_stack++;
     } else if(vm.stack[vm.top_stack].type == FLOAT|| vm.stack[vm.top_stack-1].type == FLOAT) {
+        float* val2 = NULL;
+        bool isVal2Alloc = false;
+        val2 = (float*)calloc(1, sizeof(float));
+        if(!val2) return -1;
+        isVal2Alloc = true;
+        switch(vm.stack[vm.top_stack].type) {
+        case INT: {
+            *val2 = (float)(*((long int*)vm.stack[vm.top_stack].value));
+        }
+        break;
 
+        case CHAR: {
+            *val2 = (float)(uint16_t)(wchar)(*((wchar*)vm.stack[vm.top_stack].value));
+        }
+        break;
+
+        case FLOAT: {
+            *val2 = (float)(*((float*)vm.stack[vm.top_stack].value));
+        }
+        break;
+        }
+
+        //操作数1
+        vm.top_stack--;    //此时指向第一个操作数
+        bool isVal1Alloc = false;
+        float* val1 = (float*)calloc(1, sizeof(float));
+        if(!val1) return -1;
+        isVal1Alloc = true;
+        switch(vm.stack[vm.top_stack].type) {
+        case INT: {
+            *val1 = (float)(*((long int*)vm.stack[vm.top_stack].value));
+        }
+        break;
+
+        case CHAR: {
+            *val1 = (float)(uint16_t)(wchar)(*((wchar*)vm.stack[vm.top_stack].value));
+        }
+        break;
+
+        case FLOAT: {
+            *val1 = (float)(*((float*)vm.stack[vm.top_stack].value));
+        }
+        break;
+        }
+
+        float* temp = (float*)calloc(1, sizeof(float));
+        if(!temp) return -1;
+
+        *temp = *val1+*val2;
+#ifdef SHOW_HX_DEBUG_DETAIL
+        wprintf(L"\33[33m[DEG]\33[0m \33[31mADD\33[0m {v1:%f, v2:%f}-> %f\n",*val1, *val2, *temp);
+#endif
+        if(isVal2Alloc) {
+            free(val2);
+            val2 = NULL;
+        }
+        if(isVal1Alloc) {
+            free(val1);
+            val1 = NULL;
+        }
+        vm.stack[vm.top_stack+1].value = NULL;
+        vm.stack[vm.top_stack].value = temp;
+        vm.stack[vm.top_stack].isAlloc = true;
+        vm.stack[vm.top_stack].type = FLOAT;
+        vm.top_stack++;
     } else if(vm.stack[vm.top_stack].type == INT|| vm.stack[vm.top_stack-1].type == INT) {
         //操作数2
         long int* val2 = NULL;
@@ -335,5 +405,8 @@ int interprete_OP_ADD() {
 
     }
     return 0;
+}
+int interprete_OP_MUL() {
+
 }
 #endif

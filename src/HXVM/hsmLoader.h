@@ -88,6 +88,17 @@ typedef struct ObjectCode {
 
 ObjectCode hsmCode = {0};
 
+#define MAGIC_NUMBER            "HXOBJ"  //魔数 char[]
+#define MAGIC_NUMBER_LEN        5
+
+int verifyMagicNumber(FILE* f) {   //验证魔数
+    if(f==NULL) return -1;
+    char magic[MAGIC_NUMBER_LEN+1] = {0};
+    int err = fread(magic, sizeof(magic), 1, f);
+    if(err != 1) return err;
+    if(strcmp(magic, MAGIC_NUMBER) != 0) return 1;
+    return 0;
+}
 
 /* ---------- 辅助读取函数 ---------- */
 
@@ -96,7 +107,6 @@ int read_int32(FILE* f, int32_t* v) {
     if (fread(v, sizeof(*v), 1, f) != 1) {
         return -1; // 读取失败
     }
-    // 注意：这里没有进行字节序转换。如果需要，请在此处添加。
     return 0; // 读取成功
 }
 wchar_t* read_wstring_alloc(FILE* f) {
@@ -104,7 +114,6 @@ wchar_t* read_wstring_alloc(FILE* f) {
     if (read_int32(f, &len) != 0) {
         return NULL; // 读取长度失败
     }
-
     if (len == 0) {
         return NULL;
     }
@@ -588,6 +597,11 @@ int loadObjectFile(const char* file_name) {
     if (file_name == NULL) return -1;
     FILE* f = fopen(file_name, "rb");
     if (!f) return -1;
+
+    if(verifyMagicNumber(f)) {
+        fclose(f);
+        return -1;
+    }
 
     ObjectCode tmp;
     memset(&tmp, 0, sizeof(ObjectCode));

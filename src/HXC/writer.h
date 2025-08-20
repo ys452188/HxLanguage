@@ -10,9 +10,17 @@
 #include "compiler.h"
 #define hsmCode objCode
 
-/* 写入辅助函数：写 int32，写 wchar*（len + 内容），写 bytes */
 #define UTF16_LITTLE_ENDIAN_BOM 0xFFFE
-
+#define MAGIC_NUMBER            "HXOBJ"  //魔数 char[]
+#define MAGIC_NUMBER_LEN        5
+int writeMagicNumber(FILE* fp) {     //写魔数
+    if(fp==NULL) return -1;
+    char magic[MAGIC_NUMBER_LEN+1] = {0};
+    strcpy(magic, MAGIC_NUMBER);
+    int err = fwrite(magic, sizeof(magic), 1, fp);
+    if(err==-1) return err;
+    return 0;
+}
 // 写入 32 位整数
 int write_int32(FILE* f, int32_t v) {
     if (fwrite(&v, sizeof(v), 1, f) != 1) {
@@ -20,19 +28,16 @@ int write_int32(FILE* f, int32_t v) {
     }
     return 0; // 写入成功
 }
-
 static int write_uint32(FILE* f, uint32_t v) {
     if (fwrite(&v, sizeof(uint32_t), 1, f) != 1) return -1;
     return 0;
 }
-
 // 写入 UTF-16 编码的宽字符串
 int write_wstring(FILE* f, const wchar_t* str) {
     if (str == NULL) {
         // 写入长度为 0
         return write_int32(f, 0);
     }
-
     size_t len = wcslen(str);
     if (write_int32(f, (int32_t)len) != 0) {
         return -1;
@@ -45,7 +50,6 @@ int write_wstring(FILE* f, const wchar_t* str) {
             return -1;
         }
     }
-
     return 0; // 写入成功
 }
 
@@ -198,8 +202,7 @@ int writeObjectFile(char* file_name) {
     FILE* f = fopen(file_name, "wb");
     if (!f) return -1;
 
-    /* 推荐在头部留出 magic/version/sizeof(wchar_t) 的位置以便扩展 --- 可选
-       （这里为简洁，仅写数据本身；如需兼容可自行在前面加写） */
+    if(writeMagicNumber(f)) return -1;
 
     /* 写入口 */
     if (write_int32(f, (int32_t)objCode.start_fun) != 0) {
