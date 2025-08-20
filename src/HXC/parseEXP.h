@@ -138,12 +138,12 @@ HxASTNode* create_literal_node(Token* token, int* err) {
     node->data.literal.type = type;
     if(type.type == RESULT_TYPE_STR) {
         node->data.literal.value = (wchar_t*)calloc(wcslen(token->value)+1, sizeof(wchar));
-        if(!(node->data.literal.value)) return -1;
+        if(!(node->data.literal.value)) return NULL;
         if(token->value!=NULL) wcscpy(node->data.literal.value, token->value);
         stringEscape((wchar_t*)(node->data.literal.value));
     } else if(type.type == RESULT_TYPE_CH) {
         node->data.literal.value = (wchar_t*)calloc(1, sizeof(wchar));
-        if(!(node->data.literal.value)) return -1;
+        if(!(node->data.literal.value)) return NULL;
         if(token->value!=NULL) *(wchar_t*)(node->data.literal.value) = token->value[0];
     } else {
 
@@ -581,7 +581,7 @@ int gen(HxASTNode* root, Command** cmd, int* cmd_index, int* cmd_size, ResultTyp
 }
 int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size, ResultType* result_type, CheckerSymbol** table, int table_size) {
     int err = 0;
-    if(exp==NULL||exp_size==NULL) return -1;
+    if(exp==NULL||exp_size==0) return -1;
     HxASTNode* AST = parseToAST(exp, exp_size, &err);
     if(err) return err;
 #ifdef HX_DEBUG
