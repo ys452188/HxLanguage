@@ -23,7 +23,8 @@ typedef struct StackType {
     void* value;
     bool isAlloc;   //是否是运行时分配的内存
     enum {
-        STR = 1,
+        UNKNOWN,
+        STR,
         DOUBLE,
         FLOAT,
         INT,
@@ -56,7 +57,7 @@ int pushFunIntoStackFrame(ObjFunction* fun) {
     int err = initSymbolTable(&(vm.stackFrame[vm.top_StackFrame].localeSymbolTable));
     if(err) return err;
 #ifdef SHOW_HX_DEBUG_DETAIL
-    printf("\33[33m[DEG]\33[0m函数%ls已入栈(%p).\n", vm.stackFrame[vm.top_StackFrame].func->name, &(vm.stackFrame[vm.top_StackFrame]));
+    wprintf(L"\33[33m[DEG]\33[0m函数%ls已入栈(%p).\n", vm.stackFrame[vm.top_StackFrame].func->name, &(vm.stackFrame[vm.top_StackFrame]));
 #endif
     vm.top_StackFrame++;
     return 0;
@@ -65,10 +66,10 @@ void popFunOutOfStackFrame(void) {
     if(vm.top_StackFrame > 0) { // 确保栈帧不为空
         vm.top_StackFrame--; // 先将索引移到正确的位置
 #ifdef SHOW_HX_DEBUG_DETAIL
-        printf("\33[33m[DEG]\33[0m正在弹出函数%ls...\n",vm.stackFrame[vm.top_StackFrame].func->name);
+        wprintf(L"\33[33m[DEG]\33[0m正在弹出函数%ls...\n",vm.stackFrame[vm.top_StackFrame].func->name);
 #endif
         vm.stackFrame[vm.top_StackFrame].func = NULL;
-        if(vm.stackFrame[vm.top_StackFrame].localeSymbolTable.symbol) free(vm.stackFrame[vm.top_StackFrame].localeSymbolTable.symbol);
+        freeSymbolTable(&(vm.stackFrame[vm.top_StackFrame].localeSymbolTable));
         vm.stackFrame[vm.top_StackFrame].localeSymbolTable.symbol = NULL;
     }
     return;
@@ -81,7 +82,7 @@ int pushValueIntoStack(StackType* symbol) {
     vm.stack[vm.top_stack].value = symbol->value;
     vm.stack[vm.top_stack].type = symbol->type;
 #ifdef SHOW_HX_DEBUG_DETAIL
-    printf("\33[33m[DEG]\33[0m表面值(%p)已入栈(%p).\n",symbol->value, &(vm.stack[vm.top_stack]));
+    wprintf(L"\33[33m[DEG]\33[0m表面值(%p)已入栈(%p).\n",symbol->value, &(vm.stack[vm.top_stack]));
 #endif
     vm.top_stack++;
     return 0;
@@ -90,7 +91,7 @@ void popValueOutOfStack(void) {
     if(vm.top_stack > 0) { // 确保栈帧不为空
         vm.top_stack--; // 先将索引移到正确的位置
 #ifdef SHOW_HX_DEBUG_DETAIL
-        printf("\33[33m[DEG]\33[0m正在弹出表面值(%p)...\n",vm.stack[vm.top_stack].value);
+        wprintf(L"\33[33m[DEG]\33[0m正在弹出表面值(%p)...\n",vm.stack[vm.top_stack].value);
 #endif
         if(vm.stack[vm.top_stack].isAlloc) {
             free(vm.stack[vm.top_stack].value);

@@ -425,15 +425,12 @@ static int ensure_cmd_capacity(Command** cmd, int idx, int* cmd_size) {
     return 0;
 }
 
-int gen(HxASTNode* root, Command** cmd, int* cmd_index, int* cmd_size, ResultType* result_type) {
+int gen(HxASTNode* root, Command** cmd, int* cmd_index, int* cmd_size, ResultType* result_type, CheckerSymbol** table, int table_size) {
     if (!root || !cmd || !cmd_index || !cmd_size || !result_type) return -1;
 
-    /* 确保当前索引位置可写（因为父级调用可能直接写当前位置） */
     if (ensure_cmd_capacity(cmd, *cmd_index, cmd_size) != 0) return -1;
 
-    /* 清零当前命令结构，确保字段已定义 */
     memset(&(*cmd)[*cmd_index], 0, sizeof(Command));
-    /* 确保默认值 */
     (*cmd)[*cmd_index].op = 0;
     (*cmd)[*cmd_index].op_value = NULL;
     (*cmd)[*cmd_index].op_value_size = 0;
@@ -451,12 +448,23 @@ int gen(HxASTNode* root, Command** cmd, int* cmd_index, int* cmd_size, ResultTyp
         if (!s) return -1;
         wcscpy(s, root->data.variable.name);
 
+        CheckerSymbol* symbol = NULL;
+        if(!findSymbol(s, table, table_size, &symbol)) {
+            compileError(ERR_SYM_NOT_DEFINED, root->token->lin);
+            return 255;
+        }
+        ResultType result_type_temp= parseTypeByTypeStr(symbol->type);
+        if(result_type_temp.type <= result_type->type) result_type->type=result_type_temp.type;
+        if(result_type->type==UNKNOWN) {
+            *result_type = result_type_temp;
+        }
+
         cur->op_value[0].value = (void*)s;
         cur->op_value[0].size = (int)bytes;
         cur->op_value[0].type = TYPE_SYM;
 
 #ifdef HX_DEBUG
-        wprintf(L"\33[33m生成指令：OP_PUSH 变量 \"%ls\"\n\33[0m", s);
+        printf("\33[33m生成指令：OP_PUSH\t%ls\n\33[0m", s);
 #endif
 
     } else if (root->node_type == AST_NODE_LITERAL) {
@@ -480,7 +488,7 @@ int gen(HxASTNode* root, Command** cmd, int* cmd_index, int* cmd_size, ResultTyp
             result_type->type = RESULT_TYPE_STR;
 
 #ifdef HX_DEBUG
-            wprintf(L"\33[33m生成指令：OP_PUSH \"%ls\"\n\33[0m", dst);
+            printf("\33[33m生成指令：OP_PUSH\t\"%ls\"\n\33[0m", dst);
 #endif
 
         } else if (rtype == RESULT_TYPE_CH) {
@@ -493,7 +501,7 @@ int gen(HxASTNode* root, Command** cmd, int* cmd_index, int* cmd_size, ResultTyp
             if (result_type->type <= RESULT_TYPE_CH) result_type->type = RESULT_TYPE_CH;
 
 #ifdef HX_DEBUG
-            wprintf(L"\33[33m生成指令：OP_PUSH '%lc'\n\33[0m", *ch);
+            printf("\33[33m生成指令：OP_PUSH\t'%lc'\n\33[0m", *ch);
 #endif
 
         } else {
@@ -506,16 +514,25 @@ int gen(HxASTNode* root, Command** cmd, int* cmd_index, int* cmd_size, ResultTyp
                 cur->op_value[0].type = TYPE_INT;
                 cur->op_value[0].size = (int)sizeof(long int);
                 *((long int*)cur->op_value[0].value) = *((long int*)root->data.literal.value);
+#ifdef HX_DEBUG
+                printf("\33[33m生成指令：OP_PUSH\t%ld\n\33[0m", *((long int*)cur->op_value[0].value));
+#endif
                 break;
             case RESULT_TYPE_FLOAT:
                 cur->op_value[0].type = TYPE_FLOAT;
                 cur->op_value[0].size = (int)sizeof(float);
                 *((float*)cur->op_value[0].value) = *((float*)root->data.literal.value);
+#ifdef HX_DEBUG
+                printf("\33[33m生成指令：OP_PUSH\t%f\n\33[0m", *((float*)cur->op_value[0].value));
+#endif
                 break;
             case RESULT_TYPE_DOUBLE:
                 cur->op_value[0].type = TYPE_DOUBLE;
                 cur->op_value[0].size = (int)sizeof(double);
                 *((double*)cur->op_value[0].value) = *((double*)root->data.literal.value);
+#ifdef HX_DEBUG
+                printf("\33[33m生成指令：OP_PUSH\t%lf\n\33[0m", *((double*)cur->op_value[0].value));
+#endif
                 break;
             default:
                 compileError(ERR_EXP, root->token ? root->token->lin : 0);
@@ -527,18 +544,16 @@ int gen(HxASTNode* root, Command** cmd, int* cmd_index, int* cmd_size, ResultTyp
         }
 
     } else if (root->node_type == AST_NODE_BINARY_OP) {
-        /* 先生成左、右子树指令（递归可能增加 *cmd_index） */
+        /* 先生成左、右子树指令 */
         if (!root->data.binary_op.left || !root->data.binary_op.right) return -1;
 
-        int err = gen(root->data.binary_op.left, cmd, cmd_index, cmd_size, result_type);
+        int err = gen(root->data.binary_op.left, cmd, cmd_index, cmd_size, result_type,table, table_size);
         if (err) return err;
-
-        err = gen(root->data.binary_op.right, cmd, cmd_index, cmd_size, result_type);
+        err = gen(root->data.binary_op.right, cmd, cmd_index, cmd_size, result_type,table, table_size);
         if (err) return err;
 
         /* 递归返回后，*cmd_index 已经指向下一个空位；在写入前再次保证容量 */
         if (ensure_cmd_capacity(cmd, *cmd_index, cmd_size) != 0) return -1;
-
         Command* cur = &(*cmd)[*cmd_index];
         /* 清零并初始化 */
         memset(cur, 0, sizeof(Command));
@@ -588,7 +603,7 @@ int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size
     showAST(AST);
 #endif
     result_type->type = UNKNOWN;
-    err = gen(AST, cmd, cmd_index, cmd_size, result_type);
+    err = gen(AST, cmd, cmd_index, cmd_size, result_type,table, table_size);
     if(err) return err;
     free_ast_node(AST);
     AST = NULL;

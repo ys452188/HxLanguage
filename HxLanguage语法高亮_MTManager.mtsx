@@ -1,0 +1,18 @@
+{
+    name: ["HxLanguage", ".hxl"]
+    comment: {startsWith: "#"}
+    contains: [
+        {
+            color: "string"
+            start : {match: /"""/}
+            end: {match: /"""/}
+        }
+       
+        {match: /@\w+/, 0: "meta"}
+        {match: keywordsToRegex(
+                "var con 定义函数 定义变量 fun 无参数 定义常量 type 它的类型是 parent 它的父类是"
+                "int float double str char 整型 浮点型 精确浮点型 字符串型 字符型"
+            ), 0: "keyword"
+        }
+    ]
+}

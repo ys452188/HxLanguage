@@ -9,12 +9,21 @@
 #include "hxLocale.h"
 #include "interpreter.h"
 int main(int argc, char** argv) {
+    if(argc==1||argv==NULL) {
+        initLocale();
+        wprintf(L"\33[36m[INFO]HxVituralMachine(hxvm)----HxLanguage虚拟机\33[0m\n");
+        wprintf(L"\tBy\33[37m硫酸铜非常好吃\33[0m\n");
+        wprintf(L"\t版本：\33[37mv1.0\33[0m\n");
+        wprintf(L"\tGit：\33[37mhttps://github.com/ys452188/HxLanguage.git\33[0m\n");
+        return 0;
+    }
 #ifdef HX_DEBUG
     clock_t start, end;
     start = clock();
 #endif
     initLocale();
-    if(loadObjectFile("test.hxe")) {
+    char* fileName = argv[1];
+    if(loadObjectFile(fileName)) {
         wprintf(L"\33[31m[E]加载目标文件时发生错误！\33[0m\n");
         exit(EXIT_FAILURE);
     }
@@ -28,7 +37,7 @@ int main(int argc, char** argv) {
     if(err) {
         popFunOutOfStackFrame();
         freeObjectCode(&hsmCode);
-        wprintf(L"\33[31m[E]异常终止。\33[0m");
+        wprintf(L"\33[31m[E]异常终止。\33[0m\n");
         exit(EXIT_FAILURE);
     }
     popFunOutOfStackFrame();

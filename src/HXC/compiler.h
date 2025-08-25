@@ -22,11 +22,16 @@ typedef enum CompileErrorType {
     ERR_VAR_REPEAT_DEFINE,           //变量重复定义
     ERR_SYM_NOT_DEFINED,             //变量未定义
     ERR_EXP,                         //错误的表达式
+    ERR_VAR_DEFINITION,              //定义变量的语法错误
+    ERR_CON_CAN_NOT_MOVE,            //对常量赋值"
+    ERR_FUN_NOT_DEFINED,             //函数未定义
 } CompileErrorType;
 typedef enum OPCode {   //操作码
     OP_PUT_STR,         //从栈中输出wchar_t*
     OP_DEFINE_VAR,      //定义变量,第一个操作数为变量名,第二个为类型
+    OP_MOVE,            //赋值
     OP_PUSH,
+    OP_CALL,
     OP_ADD,
     OP_SUB,   //减
     OP_MUL,
@@ -99,13 +104,6 @@ typedef struct ObjectCode {
 
 CheckerFunction* mainPtr = NULL;   //指向main函数的指针
 extern ObjectCode objCode;
-ObjectCode objCode = {
-    .start_fun = 0,
-    .obj_fun = NULL,
-    .obj_sym_size = 0,
-    .obj_sym = NULL,
-    .obj_fun_size = 0,
-};
 typedef union ResultType {
     enum {
         RESULT_TYPE_STR = 1,
@@ -120,7 +118,8 @@ typedef union ResultType {
 
 void stringEscape(wchar* str);    //字符串转义
 bool findSymbol(wchar* name, CheckerSymbol** table, int table_size, CheckerSymbol** ptr);   //从table查找符号,ptr将指向该符号
-ResultType parseType(wchar* str);       //通过字符串判断表面值的类型
+ResultType parseType(wchar* str);          //通过表面值字符串判断表面值的类型
+ResultType parseTypeByTypeStr(wchar* str);  //通过类型名判断类型
 int allocOpValueByType(const ResultType* type, void** ptr);
 int setValueByType(const ResultType* type, const wchar* str, void** ptr);
 void freeObjCode(void);
@@ -130,7 +129,456 @@ int parseEXP(Command** cmd,int* cmd_index,int* cmd_size,Token* exp, int exp_size
 int compile(CheckerOutput*);
 #include "parseEXP.h"
 
+ResultType parseTypeByTypeStr(wchar* str) {
+    ResultType type = {
+        .type=UNKNOWN,
+        .type_unknown = NULL,
+    };
+    if(str == NULL) {
+        return type;
+    }
+    if(wcsequ(str, L"int")||wcsequ(str, L"整型")) {
+        type.type = RESULT_TYPE_INT;
+    } else if(wcsequ(str, L"float")||wcsequ(str, L"浮点型")) {
+        type.type = RESULT_TYPE_FLOAT;
+    } else if(wcsequ(str, L"double")||wcsequ(str, L"精确浮点型")) {
+        type.type = RESULT_TYPE_DOUBLE;
+    } else if(wcsequ(str, L"char")||wcsequ(str, L"字符型")) {
+        type.type = RESULT_TYPE_CH;
+    } else if(wcsequ(str, L"str")||wcsequ(str, L"字符串型")) {
+        type.type = RESULT_TYPE_STR;
+    } else {
+        type.type_unknown = str;
+    }
+    return type;
+}
 
+ObjectCode objCode = {   //目标代码
+    .start_fun = 0,
+    .obj_fun = NULL,
+    .obj_sym_size = 0,
+    .obj_sym = NULL,
+    .obj_fun_size = 0,
+};
+int obj_fun_index = 0;
+int compile_fun(CheckerFunction* func) {   //生成该函数的目标代码并加入至objCode.obj_fun  返回-1表内存错误,1表该函数无意义,255表语法错误
+    if(func==NULL) return -1;
+    if(func->name==NULL) return -1;
+    if(func->body==NULL||func->body_size==0) return 1;  //废物函数
+    if(objCode.obj_fun==NULL) {
+        objCode.obj_fun=(ObjFunction*)calloc(1, sizeof(ObjFunction));
+        if(!(objCode.obj_fun)) return -1;
+        objCode.obj_fun_size = 1;
+    }
+    if(objCode.obj_fun_size <= obj_fun_index) {
+        objCode.obj_fun_size = obj_fun_index+1;
+        void* temp = realloc(objCode.obj_fun, (objCode.obj_fun_size)*sizeof(ObjFunction));
+        if(!temp) return -1;
+        objCode.obj_fun = (ObjFunction*)temp;
+        memset(&(objCode.obj_fun[obj_fun_index]), 0, sizeof(ObjFunction));
+    }
+    //复制函数名
+    objCode.obj_fun[obj_fun_index].name = (wchar*)calloc(wcslen(func->name)+1, sizeof(wchar));
+    if(!(objCode.obj_fun[obj_fun_index].name)) return -1;
+    wcscpy(objCode.obj_fun[obj_fun_index].name, func->name);
+    //复制参数
+    if(func->args==NULL||func->args_size==NULL) {
+        objCode.obj_fun[obj_fun_index].args = NULL;
+        objCode.obj_fun[obj_fun_index].args_size = 0;
+    } else {
+
+
+
+    }
+    //复制返回值
+    if(func->ret_type == NULL) {
+        objCode.obj_fun[obj_fun_index].ret_type = NULL;
+    } else {
+
+
+
+    }
+    CheckerSymbol* local_sym = NULL;
+    int local_sym_size = 0;
+    int sym_index = 0;
+    objCode.obj_fun[obj_fun_index].body = (Command*)calloc(1, sizeof(Command));
+    if(!(objCode.obj_fun[obj_fun_index].body)) return -1;
+    objCode.obj_fun[obj_fun_index].body_size = 1;
+    int cmd_index = 0;
+    //分析函数体
+    for(int i = 0; i < func->body_size; i++) {
+        switch(func->body[i].type) {
+        case TOK_ID: {
+            if(wcsequ(func->body[i].value, L"putString") || wcsequ(func->body[i].value, L"输出字符串")) {
+                if(i+1 >= func->body_size) {
+                    compileError(ERR_CALL_FUN, func->body[i].lin);
+                    return 255;
+                }
+                i++;
+                if((!wcsequ(func->body[i].value, L"("))&&(!wcsequ(func->body[i].value, L"（"))) {
+                    compileError(ERR_CALL_FUN, func->body[i].lin);
+                    return 255;
+                }
+                if(i+1 >= func->body_size) {
+                    compileError(ERR_CALL_FUN, func->body[i].lin);
+                    return 255;
+                }
+                i++;
+                int exp_start = i;
+                int count = 0;
+                int open = 1;
+                int close = 0;
+                while(i < func->body_size-1) {
+                    if(wcsequ(func->body[i].value, L"(")||wcsequ(func->body[i].value, L"（")) {
+                        open++;
+                    }
+                    if(wcsequ(func->body[i].value, L")")||wcsequ(func->body[i].value, L"）")) {
+                        close++;
+                    }
+                    if(open == close) break;
+                    count++;
+                    i++;
+                }
+                if(open!=close) {
+                    compileError(ERR_QUITE_NOT_CORRECTLY_CLOSE, func->body[i].lin);
+                    return 255;
+                }
+                int exp_end = i;
+                if(exp_end-exp_start==0) {
+                    compileError(ERR_FUN_ARGS_SIZE,func->body[i].lin);
+                    return 255;
+                }
+                //分析参数
+                ResultType result_type = {0};
+                int EXPErr = parseEXP(&(objCode.obj_fun[obj_fun_index].body), &cmd_index, &(objCode.obj_fun[obj_fun_index].body_size), &(func->body[exp_start]), exp_end-exp_start, &result_type, &local_sym, local_sym_size);
+                if(EXPErr) return EXPErr;
+
+                if(result_type.type != RESULT_TYPE_STR||result_type.type==UNKNOWN) {
+                    compileError(ERR_FUN_ARGS_TYPE, func->body[i].lin);
+                    return 255;
+                }
+                //生成指令OP_PUT_STR
+                if(cmd_index >= objCode.obj_fun[obj_fun_index].body_size) {
+                    objCode.obj_fun[obj_fun_index].body_size = cmd_index+1;
+                    void* temp = realloc(objCode.obj_fun[obj_fun_index].body, sizeof(Command)*(objCode.obj_fun[obj_fun_index].body_size));
+                    if(!temp) return -1;
+                    objCode.obj_fun[obj_fun_index].body = (Command*)temp;
+                    memset(&objCode.obj_fun[obj_fun_index].body[cmd_index], 0, sizeof(Command));
+                }
+                objCode.obj_fun[obj_fun_index].body[cmd_index].op_value_size = 1;
+                objCode.obj_fun[obj_fun_index].body[cmd_index].op = OP_PUT_STR;
+                objCode.obj_fun[obj_fun_index].body[cmd_index].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+                objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].type = TYPE_STR;
+#ifdef HX_DEBUG
+                printf("生成指令[%d]：OP_PUT_STR \n", cmd_index);
+#endif
+                if(objCode.obj_fun[obj_fun_index].body_size <= cmd_index) {
+                    objCode.obj_fun[obj_fun_index].body_size = cmd_index+1;
+                    void* temp = realloc(objCode.obj_fun[obj_fun_index].body, objCode.obj_fun[obj_fun_index].body_size*sizeof(Command));
+                    if(!temp) return -1;
+                    objCode.obj_fun[obj_fun_index].body = (Command*)temp;
+                }
+                memset(&objCode.obj_fun[obj_fun_index].body[cmd_index], 0, sizeof(Command));
+
+                if(!(i+1 < func->body_size)) {
+                    error(ERR_NO_END, func->body[i].lin);
+                    return 255;
+                }
+                i++;
+#ifdef HX_DEBUG
+                //printf("%ls\n", mainPtr->body[i].value);
+#endif
+
+                if(!wcsequ(func->body[i].value, L";")&&!wcsequ(func->body[i].value, L"；")) {
+                    error(ERR_NO_END, func->body[i].lin);
+                    return 255;
+                }
+                cmd_index++;
+            } else {     //调用函数或赋值
+                if(!(i+1 < func->body_size)) {     //ID (NULL)
+                    error(ERR_NO_END, func->body[i].lin);
+                    return 255;
+                }
+                wchar* symName = func->body[i].value;      //符号名
+                i++;
+                if(wcsequ(func->body[i].value, L";")||wcsequ(func->body[i].value, L"；")) {    //ID ;|；
+                    //废话
+                    break;
+                } else if(wcsequ(func->body[i].value, L"=")) {   //赋值
+                    CheckerSymbol* symPtr = NULL;
+                    //检查符号是否定义
+                    if(!findSymbol(symName, &local_sym, local_sym_size, &symPtr)) {
+                        compileError(ERR_SYM_NOT_DEFINED, func->body[i-1].lin);
+                        return 255;
+                    }
+                    //检查是否为常量"
+                    if((symPtr->isOnlyRead)&&(symPtr->isInited)) {
+                        compileError(ERR_CON_CAN_NOT_MOVE, func->body[i-1].lin);
+                        return 255;
+                    }
+                    if(!(i+1 < func->body_size)) {     //ID (NULL)
+                        compileError(ERR_EXP, func->body[i].lin);
+                        return 255;
+                    }
+                    i++;
+                    int exp_start = i;
+                    while(i+1 < func->body_size) {
+                        i++;
+                        if(wcsequ(func->body[i].value, L";")||wcsequ(func->body[i].value, L"；")) break;
+                    }
+                    if(!wcsequ(func->body[i].value, L";")&&!wcsequ(func->body[i].value, L"；")) {
+                        error(ERR_NO_END, func->body[i].lin);
+                        return 255;
+                    }
+                    int exp_end = i;
+                    if(exp_end==exp_start) {
+                        compileError(ERR_EXP, func->body[i].lin);
+                        return 255;
+                    }
+                    ResultType result_type = {0};
+                    int EXPErr = parseEXP(&(objCode.obj_fun[obj_fun_index].body), &cmd_index, &(objCode.obj_fun[obj_fun_index].body_size), &(func->body[exp_start]), exp_end-exp_start, &result_type, &local_sym, local_sym_size);
+                    if(EXPErr) return EXPErr;
+                    //检测类型
+
+
+                    //生成指令
+                    if(cmd_index >= objCode.obj_fun[obj_fun_index].body_size) {
+                        objCode.obj_fun[obj_fun_index].body_size = cmd_index+1;
+                        void* temp = realloc(objCode.obj_fun[obj_fun_index].body, sizeof(Command)*(objCode.obj_fun[obj_fun_index].body_size));
+                        if(!temp) return -1;
+                        objCode.obj_fun[obj_fun_index].body = (Command*)temp;
+                        memset(&objCode.obj_fun[obj_fun_index].body[cmd_index], 0, sizeof(Command));
+                    }
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op_value_size = 1;
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op = OP_MOVE;
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].type = TYPE_SYM;
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value = calloc(wcslen(symName)+1, sizeof(wchar));
+                    if(!(objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value)) return -1;
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].size = (wcslen(symName)+1)*sizeof(wchar);
+                    wcscpy(((wchar*)objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value), symName);
+#ifdef HX_DEBUG
+                    printf("\33[33m生成指令：OP_MOVE\t%ls\33[0m\n", ((wchar*)objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value));
+#endif
+                    cmd_index++;
+
+                } else if(wcsequ(func->body[i].value, L"(")||wcsequ(func->body[i].value, L"（")) { //调用函数
+                    if(!(i+1 < func->body_size)) {     //ID (NULL)
+                        error(ERR_NO_END, func->body[i].lin);
+                        return 255;
+                    }
+                    i++;
+                    if(wcsequ(func->body[i].value, L")")||wcsequ(func->body[i].value, L"）")) {   //无参
+                        //查找函数.
+
+
+
+
+                        //OP_CALL <SYM_NAME>[args]
+                        //生成指令
+                        if(cmd_index >= objCode.obj_fun[obj_fun_index].body_size) {
+                            objCode.obj_fun[obj_fun_index].body_size = cmd_index+1;
+                            void* temp = realloc(objCode.obj_fun[obj_fun_index].body, sizeof(Command)*(objCode.obj_fun[obj_fun_index].body_size));
+                            if(!temp) return -1;
+                            objCode.obj_fun[obj_fun_index].body = (Command*)temp;
+                            memset(&objCode.obj_fun[obj_fun_index].body[cmd_index], 0, sizeof(Command));
+                        }
+                        objCode.obj_fun[obj_fun_index].body[cmd_index].op_value_size = 1;
+                        objCode.obj_fun[obj_fun_index].body[cmd_index].op = OP_CALL;
+                        objCode.obj_fun[obj_fun_index].body[cmd_index].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+                        objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].type = TYPE_SYM;
+                        objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value = calloc(wcslen(symName)+1, sizeof(wchar));
+                        if(!(objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value )) return -1;
+                        objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].size = (wcslen(symName)+1)*sizeof(wchar);
+                        wcscpy(((wchar*)objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value), symName);
+#ifdef HX_DEBUG
+                        printf("\33[33m生成指令：OP_CALL\t%ls\33[0m\n", ((wchar*)objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value));
+#endif
+                        cmd_index++;
+                    } else {   //有参数
+
+                    }
+                } else {  //废话
+
+                }
+            }
+        }
+        break;
+
+        case TOK_KW: {
+            if(wcsequ(func->body[i].value, L"var")||wcsequ(func->body[i].value, L"定义变量")) {
+                if(local_sym==NULL) {
+                    local_sym = (CheckerSymbol*)calloc(1, sizeof(CheckerSymbol));
+                    if(!local_sym) return -1;
+                    local_sym_size = 1;
+                }
+                if(sym_index>= local_sym_size) {
+                    local_sym_size = sym_index+1;
+                    void* temp = realloc(local_sym, local_sym_size*sizeof(CheckerSymbol));
+                    if(!temp) return -1;
+                    local_sym = (CheckerSymbol*)temp;
+                }
+                if(!(i+1 < func->body_size)) {
+                    error(ERR_NO_VAR_NAME, func->body[i].lin);
+                    return 255;
+                }
+                i++;
+                if((!wcsequ(func->body[i].value, L":"))&&(!wcsequ(func->body[i].value, L"："))) {
+                    error(ERR_NO_VAR_NAME, func->body[i].lin);
+                    return 255;
+                }
+                if(!(i+1 < func->body_size)) {
+                    error(ERR_NO_VAR_NAME, func->body[i].lin);
+                    return 255;
+                }
+                i++;
+                if(func->body[i].type != TOK_ID) {
+                    error(ERR_NO_VAR_NAME, func->body[i].lin);
+                    return 255;
+                }
+                CheckerSymbol* ptr = NULL;
+                //检查是否重复定义
+                if(findSymbol(func->body[i].value, &local_sym, local_sym_size-1, &ptr)) {
+                    compileError(ERR_VAR_REPEAT_DEFINE, func->body[i].lin);
+                    return 255;
+                }
+                local_sym[sym_index].isOnlyRead = false;
+                local_sym[sym_index].name = (wchar*)calloc(wcslen(func->body[i].value)+1, sizeof(wchar));
+                if(!(local_sym[sym_index].name)) return -1;
+                wcscpy(local_sym[sym_index].name, func->body[i].value);
+                //变量名
+                if(!(i+1 < func->body_size)) {
+                    error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, func->body[i].lin);
+                    return 255;
+                }
+                i++;
+                if(!wcsequ(func->body[i].value, L",")) {
+                    error(ERR_BEHIND_SYMBOL_SHOULD_BE_DOUHAO, func->body[i].lin);
+                    return 255;
+                }
+                if(!(i+1 < func->body_size)) {
+                    error(ERR_SYM_NO_TYPE, func->body[i].lin);
+                    return 255;
+                }
+                i++;
+                if((!wcsequ(func->body[i].value, L"type"))&&(!wcsequ(func->body[i].value, L"它的类型是"))) {
+                    error(ERR_SYM_NO_TYPE, func->body[i].lin);
+                    return 255;
+                }
+                if(!(i+1 < func->body_size)) {
+                    error(ERR_SYM_NO_TYPE, func->body[i].lin);
+                    return 255;
+                }
+                i++;
+                if((!wcsequ(func->body[i].value, L":"))&&(!wcsequ(func->body[i].value, L"："))) {
+                    error(ERR_SYM_NO_TYPE, func->body[i].lin);
+                    return 255;
+                }
+                if(!(i+1 < func->body_size)) {
+                    error(ERR_SYM_NO_TYPE, func->body[i].lin);
+                    return 255;
+                }
+                i++;
+                if(func->body[i].type != TOK_ID && func->body[i].type != TOK_KW) {
+                    error(ERR_SYM_NO_TYPE, func->body[i].lin);
+                    return 255;
+                }
+                local_sym[sym_index].type = (wchar*)calloc(wcslen(func->body[i].value)+1, sizeof(wchar));
+                if(!(local_sym[sym_index].type)) return -1;
+                wcscpy(local_sym[sym_index].type, func->body[i].value);
+
+                if(!(i+1 < func->body_size)) {
+                    error(ERR_NO_END, func->body[i].lin);
+                    return 255;
+                }
+                i++;
+                if(cmd_index >= objCode.obj_fun[obj_fun_index].body_size) {
+                    objCode.obj_fun[obj_fun_index].body_size = cmd_index+1;
+                    void* temp = realloc(objCode.obj_fun[obj_fun_index].body, sizeof(Command)*(objCode.obj_fun[obj_fun_index].body_size));
+                    if(!temp) return -1;
+                    objCode.obj_fun[obj_fun_index].body = (Command*)temp;
+                    memset(&objCode.obj_fun[obj_fun_index].body[cmd_index], 0, sizeof(Command));
+                }
+
+                objCode.obj_fun[obj_fun_index].body[cmd_index].op = OP_DEFINE_VAR;
+                objCode.obj_fun[obj_fun_index].body[cmd_index].op_value = (ObjValue*)calloc(2, sizeof(ObjValue));
+                objCode.obj_fun[obj_fun_index].body[cmd_index].op_value_size = 2;
+                (objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value) = (wchar*)calloc(wcslen(local_sym[sym_index].name)+1, sizeof(wchar));
+                if(!(objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value)) return -1;
+                wcscpy((wchar*)(objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value), local_sym[sym_index].name);
+
+                (objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[1].value) = (wchar*)calloc(wcslen(local_sym[sym_index].type)+1, sizeof(wchar));
+                if(!(objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[1].value)) return -1;
+                wcscpy((wchar*)(objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[1].value), local_sym[sym_index].type);
+#ifdef HX_DEBUG
+                printf("\33[33m生成指令：OP_DEFINE_VAR\t%ls  %ls\n\33[0m", (wchar*)(objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value), (wchar*)(objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[1].value));
+#endif
+                cmd_index++;
+                if(wcsequ(func->body[i].value, L";")||wcsequ(func->body[i].value, L"；")) {
+                    sym_index++;
+                    break;
+                } else {
+                    if(!wcsequ(func->body[i].value, L"=")) {
+                        compileError(ERR_VAR_DEFINITION, func->body[i].lin);
+                        return 255;
+                    }
+                    if(!(i+1 < func->body_size)) {
+                        error(ERR_VAR_DEFINITION, func->body[i].lin);
+                        return 255;
+                    }
+                    i++;   //此时时向表达式
+                    //分析表达式
+                    int exp_start = i;
+                    while(i+1 < func->body_size) {
+                        if(wcsequ(func->body[i].value, L";")||wcsequ(func->body[i].value, L"；")) break;
+                        i++;
+                    }
+                    if(!wcsequ(func->body[i].value, L";")&&!wcsequ(func->body[i].value, L"；")) {
+                        error(ERR_NO_END, func->body[i].lin);
+                        return 255;
+                    }
+                    int exp_end = i;
+                    if(exp_end==exp_start) {
+                        error(ERR_EXP, func->body[i].lin);
+                        return 255;
+                    }
+                    ResultType result_type = {0};
+                    int EXPErr = parseEXP(&(objCode.obj_fun[obj_fun_index].body), &cmd_index, &(objCode.obj_fun[obj_fun_index].body_size), &(func->body[exp_start]), exp_end-exp_start, &result_type, &local_sym, local_sym_size);
+                    if(EXPErr) return EXPErr;
+                    //检测类型
+
+
+
+
+                    //生成指令
+                    if(cmd_index >= objCode.obj_fun[obj_fun_index].body_size) {
+                        objCode.obj_fun[obj_fun_index].body_size = cmd_index+1;
+                        void* temp = realloc(objCode.obj_fun[obj_fun_index].body, sizeof(Command)*(objCode.obj_fun[obj_fun_index].body_size));
+                        if(!temp) return -1;
+                        objCode.obj_fun[obj_fun_index].body = (Command*)temp;
+                        memset(&objCode.obj_fun[obj_fun_index].body[cmd_index], 0, sizeof(Command));
+                    }
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op_value_size = 1;
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op = OP_MOVE;
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].type = TYPE_SYM;
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value = calloc(wcslen(local_sym[sym_index].name)+1, sizeof(wchar));
+                    if(!(objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value )) return -1;
+                    objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].size = (wcslen(local_sym[sym_index].name)+1)*sizeof(wchar);
+                    wcscpy(((wchar*)objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value), local_sym[sym_index].name);
+#ifdef HX_DEBUG
+                    printf("\33[33m生成指令：OP_MOVE\t%ls\33[0m\n", ((wchar*)objCode.obj_fun[obj_fun_index].body[cmd_index].op_value[0].value));
+#endif
+                    sym_index++;
+                    cmd_index++;
+                }
+            }
+        }
+        break;
+        }
+    }
+    return 0;
+}
 /*编译：
 *分析main函数,仅写入main函数内调用过的函数
 */
@@ -142,6 +590,7 @@ int compile(CheckerOutput* IR) {
     CheckerSymbol* local_sym = NULL;
     int local_sym_size = 0;
     int sym_index = 0;
+    obj_fun_index++;
     if(mainPtr->args == NULL) {                 //无参main
         if(mainPtr->body == NULL||mainPtr->body_size == 0) {             //空函数不进行任何操作
             //写入空的main函数
@@ -279,6 +728,127 @@ int compile(CheckerOutput* IR) {
                             return 255;
                         }
                         cmd_index++;
+                    } else {     //调用函数或赋值
+                        if(!(i+1 < mainPtr->body_size)) {     //ID (NULL)
+                            error(ERR_NO_END, mainPtr->body[i].lin);
+                            return 255;
+                        }
+                        wchar* symName = mainPtr->body[i].value;      //符号名
+                        i++;
+                        if(wcsequ(mainPtr->body[i].value, L";")||wcsequ(mainPtr->body[i].value, L"；")) {    //ID ;|；
+                            //废话
+                            break;
+                        } else if(wcsequ(mainPtr->body[i].value, L"=")) {   //赋值
+                            CheckerSymbol* symPtr = NULL;
+                            //检查符号是否定义
+                            if(!findSymbol(symName, &local_sym, local_sym_size, &symPtr)) {
+                                compileError(ERR_SYM_NOT_DEFINED, mainPtr->body[i-1].lin);
+                                return 255;
+                            }
+                            //检查是否为常量"
+                            if((symPtr->isOnlyRead)&&(symPtr->isInited)) {
+                                compileError(ERR_CON_CAN_NOT_MOVE, mainPtr->body[i-1].lin);
+                                return 255;
+                            }
+                            if(!(i+1 < mainPtr->body_size)) {     //ID (NULL)
+                                compileError(ERR_EXP, mainPtr->body[i].lin);
+                                return 255;
+                            }
+                            i++;
+                            int exp_start = i;
+                            while(i+1 < mainPtr->body_size) {
+                                i++;
+                                if(wcsequ(mainPtr->body[i].value, L";")||wcsequ(mainPtr->body[i].value, L"；")) break;
+                            }
+                            if(!wcsequ(mainPtr->body[i].value, L";")&&!wcsequ(mainPtr->body[i].value, L"；")) {
+                                error(ERR_NO_END, mainPtr->body[i].lin);
+                                return 255;
+                            }
+                            int exp_end = i;
+                            if(exp_end==exp_start) {
+                                compileError(ERR_EXP, mainPtr->body[i].lin);
+                                return 255;
+                            }
+                            ResultType result_type = {0};
+                            int EXPErr = parseEXP(&(objMainPtr->body), &cmd_index, &(objMainPtr->body_size), &(mainPtr->body[exp_start]), exp_end-exp_start, &result_type, &local_sym, local_sym_size);
+                            if(EXPErr) return EXPErr;
+                            //检测类型
+
+
+                            //生成指令
+                            if(cmd_index >= objMainPtr->body_size) {
+                                objMainPtr->body_size = cmd_index+1;
+                                void* temp = realloc(objMainPtr->body, sizeof(Command)*(objMainPtr->body_size));
+                                if(!temp) return -1;
+                                objMainPtr->body = (Command*)temp;
+                                memset(&objMainPtr->body[cmd_index], 0, sizeof(Command));
+                            }
+                            objMainPtr->body[cmd_index].op_value_size = 1;
+                            objMainPtr->body[cmd_index].op = OP_MOVE;
+                            objMainPtr->body[cmd_index].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+                            objMainPtr->body[cmd_index].op_value[0].type = TYPE_SYM;
+                            objMainPtr->body[cmd_index].op_value[0].value = calloc(wcslen(symName)+1, sizeof(wchar));
+                            if(!(objMainPtr->body[cmd_index].op_value[0].value )) return -1;
+                            objMainPtr->body[cmd_index].op_value[0].size = (wcslen(symName)+1)*sizeof(wchar);
+                            wcscpy(((wchar*)objMainPtr->body[cmd_index].op_value[0].value), symName);
+#ifdef HX_DEBUG
+                            printf("\33[33m生成指令：OP_MOVE\t%ls\33[0m\n", ((wchar*)objMainPtr->body[cmd_index].op_value[0].value));
+#endif
+                            cmd_index++;
+
+                        } else if(wcsequ(mainPtr->body[i].value, L"(")||wcsequ(mainPtr->body[i].value, L"（")) { //调用函数
+                            if(!(i+1 < mainPtr->body_size)) {     //ID (NULL)
+                                error(ERR_NO_END, mainPtr->body[i].lin);
+                                return 255;
+                            }
+                            i++;
+                            if(wcsequ(mainPtr->body[i].value, L")")||wcsequ(mainPtr->body[i].value, L"）")) {   //无参
+                                //查找函数.
+                                CheckerFunction* funcPtr = NULL;
+                                for(int j = 0; j < checkerOutput.func_size; j++) {  //查找函数
+                                    if(wcsequ(checkerOutput.checker_func[j].name, symName)&&(checkerOutput.checker_func[j].args == NULL)) {
+                                        funcPtr = &(checkerOutput.checker_func[j]);
+                                    }
+                                }
+                                if(funcPtr == NULL) {
+                                    compileError(ERR_FUN_NOT_DEFINED, mainPtr->body[i-1].lin);
+                                    return 255;
+                                }
+                                int flag = compile_fun(funcPtr);
+                                // 在 realloc 可能发生后，立即刷新 objMainPtr 指针 <==
+                                objMainPtr = &(objCode.obj_fun[0]);
+                                if(flag != 1 && flag != 0) {
+                                    return flag;
+                                } else if(flag==1) {
+                                    continue;
+                                }
+                                //OP_CALL <SYM_NAME>[args]
+                                //生成指令
+                                if(cmd_index >= objMainPtr->body_size) {
+                                    objMainPtr->body_size = cmd_index+1;
+                                    void* temp = realloc(objMainPtr->body, sizeof(Command)*(objMainPtr->body_size));
+                                    if(!temp) return -1;
+                                    objMainPtr->body = (Command*)temp;
+                                    memset(&objMainPtr->body[cmd_index], 0, sizeof(Command));
+                                }
+                                objMainPtr->body[cmd_index].op_value_size = 1;
+                                objMainPtr->body[cmd_index].op = OP_CALL;
+                                objMainPtr->body[cmd_index].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+                                objMainPtr->body[cmd_index].op_value[0].type = TYPE_SYM;
+                                objMainPtr->body[cmd_index].op_value[0].value = calloc(wcslen(symName)+1, sizeof(wchar));
+                                if(!(objMainPtr->body[cmd_index].op_value[0].value )) return -1;
+                                objMainPtr->body[cmd_index].op_value[0].size = (wcslen(symName)+1)*sizeof(wchar);
+                                wcscpy(((wchar*)objMainPtr->body[cmd_index].op_value[0].value), symName);
+#ifdef HX_DEBUG
+                                printf("\33[33m生成指令：OP_CALL\t%ls\33[0m\n", ((wchar*)objMainPtr->body[cmd_index].op_value[0].value));
+#endif
+                                cmd_index++;
+                            } else {   //有参数
+
+                            }
+                        } else {  //废话
+
+                        }
                     }
                 }
                 break;
@@ -316,7 +886,7 @@ int compile(CheckerOutput* IR) {
                         }
                         CheckerSymbol* ptr = NULL;
                         //检查是否重复定义
-                        if(findSymbol(mainPtr->body[i].value, &local_sym, local_sym_size, &ptr)) {
+                        if(findSymbol(mainPtr->body[i].value, &local_sym, local_sym_size-1, &ptr)) {
                             compileError(ERR_VAR_REPEAT_DEFINE, mainPtr->body[i].lin);
                             return 255;
                         }
@@ -389,19 +959,66 @@ int compile(CheckerOutput* IR) {
                         if(!(objMainPtr->body[cmd_index].op_value[1].value)) return -1;
                         wcscpy((wchar*)(objMainPtr->body[cmd_index].op_value[1].value), local_sym[sym_index].type);
 #ifdef HX_DEBUG
-                        printf("[DEB]varName:%ls\n", (wchar*)(objMainPtr->body[cmd_index].op_value[0].value));
-#endif
-#ifdef HX_DEBUG
-                        printf("[DEB]varType:%ls\n", (wchar*)(objMainPtr->body[cmd_index].op_value[1].value));
+                        printf("\33[33m生成指令：OP_DEFINE_VAR\t%ls  %ls\n\33[0m", (wchar*)(objMainPtr->body[cmd_index].op_value[0].value), (wchar*)(objMainPtr->body[cmd_index].op_value[1].value));
 #endif
                         cmd_index++;
                         if(wcsequ(mainPtr->body[i].value, L";")||wcsequ(mainPtr->body[i].value, L"；")) {
                             sym_index++;
                             break;
                         } else {
+                            if(!wcsequ(mainPtr->body[i].value, L"=")) {
+                                compileError(ERR_VAR_DEFINITION, mainPtr->body[i].lin);
+                                return 255;
+                            }
+                            if(!(i+1 < mainPtr->body_size)) {
+                                error(ERR_VAR_DEFINITION, mainPtr->body[i].lin);
+                                return 255;
+                            }
+                            i++;   //此时时向表达式
+                            //分析表达式
+                            int exp_start = i;
+                            while(i+1 < mainPtr->body_size) {
+                                if(wcsequ(mainPtr->body[i].value, L";")||wcsequ(mainPtr->body[i].value, L"；")) break;
+                                i++;
+                            }
+                            if(!wcsequ(mainPtr->body[i].value, L";")&&!wcsequ(mainPtr->body[i].value, L"；")) {
+                                error(ERR_NO_END, mainPtr->body[i].lin);
+                                return 255;
+                            }
+                            int exp_end = i;
+                            if(exp_end==exp_start) {
+                                error(ERR_EXP, mainPtr->body[i].lin);
+                                return 255;
+                            }
+                            ResultType result_type = {0};
+                            int EXPErr = parseEXP(&(objMainPtr->body), &cmd_index, &(objMainPtr->body_size), &(mainPtr->body[exp_start]), exp_end-exp_start, &result_type, &local_sym, local_sym_size);
+                            if(EXPErr) return EXPErr;
+                            //检测类型
 
 
+
+
+                            //生成指令
+                            if(cmd_index >= objMainPtr->body_size) {
+                                objMainPtr->body_size = cmd_index+1;
+                                void* temp = realloc(objMainPtr->body, sizeof(Command)*(objMainPtr->body_size));
+                                if(!temp) return -1;
+                                objMainPtr->body = (Command*)temp;
+                                memset(&objMainPtr->body[cmd_index], 0, sizeof(Command));
+                            }
+                            objMainPtr->body[cmd_index].op_value_size = 1;
+                            objMainPtr->body[cmd_index].op = OP_MOVE;
+                            objMainPtr->body[cmd_index].op_value = (ObjValue*)calloc(1, sizeof(ObjValue));
+                            objMainPtr->body[cmd_index].op_value[0].type = TYPE_SYM;
+                            objMainPtr->body[cmd_index].op_value[0].value = calloc(wcslen(local_sym[sym_index].name)+1, sizeof(wchar));
+                            if(!(objMainPtr->body[cmd_index].op_value[0].value )) return -1;
+                            objMainPtr->body[cmd_index].op_value[0].size = (wcslen(local_sym[sym_index].name)+1)*sizeof(wchar);
+                            wcscpy(((wchar*)objMainPtr->body[cmd_index].op_value[0].value), local_sym[sym_index].name);
+#ifdef HX_DEBUG
+                            printf("\33[33m生成指令：OP_MOVE\t%ls\33[0m\n", ((wchar*)objMainPtr->body[cmd_index].op_value[0].value));
+#endif
                             sym_index++;
+                            cmd_index++;
                         }
                     }
                 }
@@ -419,7 +1036,7 @@ bool findSymbol(wchar* name, CheckerSymbol** table, int table_size, CheckerSymbo
     if (table == NULL) {
         if (checkerOutput.global_sym == NULL) return false;
         for (int i = 0; i < checkerOutput.global_sym_size; ++i) {
-            /* guard: 确保 global_sym[i].name 非空 */
+            /*确保 global_sym[i].name 非空    */
             if (checkerOutput.global_sym[i].name == NULL) continue;
             if (wcsequ(name, checkerOutput.global_sym[i].name)) {
                 if(ptr!=NULL) {
@@ -444,13 +1061,11 @@ bool findSymbol(wchar* name, CheckerSymbol** table, int table_size, CheckerSymbo
             }
         }
         return false;
-    }
-
-    /* 查找局部表（注意每个条目要判空） */
-    for (int i = 0; i < table_size-1; ++i) {
+    }   /* 查找局部表*/
+    for (int i = 0; i < table_size; ++i) {
         const CheckerSymbol *entry = &((*table)[i]);
-        if (entry == NULL) continue;            /* defensive */
-        if (entry->name == NULL) continue;      /* 很重要：不要把 NULL 传给 wcsequ */
+        if (entry == NULL) continue;
+        if (entry->name == NULL) continue;
         if (wcsequ(name, entry->name)) {
             if(ptr!=NULL) {
                 *ptr = entry;
@@ -639,6 +1254,20 @@ void compileError(CompileErrorType type, int errLine) {
         fwprintf(stderr, L"\33[31m[E]错误的表达式！(位于第%d行)\33[0m\n", errLine);
     }
     break;
+
+    case ERR_VAR_DEFINITION: {
+        fwprintf(stderr, L"\33[31m[E]定义变量的语法错误！(位于第%d行)\33[0m\n", errLine);
+    }
+    break;
+
+    case ERR_CON_CAN_NOT_MOVE: {
+        fwprintf(stderr, L"\33[31m[E]常量符号不可赋值！(位于第%d行)\33[0m\n", errLine);
+    }
+    break;
+
+    case ERR_FUN_NOT_DEFINED: {
+        fwprintf(stderr, L"\33[31m[E]函数未定义！(位于第%d行)\33[0m\n", errLine);
+    }
     }
     return;
 }

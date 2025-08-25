@@ -40,6 +40,7 @@ typedef struct CheckerSymbol {
     wchar* name;
     wchar* type;
     bool isOnlyRead;
+    bool isInited;   //是否已初始化,若isInited&&isOlyRead的符号进行赋值则报错
 }  CheckerSymbol;
 typedef struct CheckerClass {
     wchar* name;

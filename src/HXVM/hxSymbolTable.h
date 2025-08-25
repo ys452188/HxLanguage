@@ -7,13 +7,14 @@
 
 #define HASH_VALUE 2166136261U
 #define PRIME 16777619U
-#define SYMBOL_TABLE_INITIAL_SIZE 32  //符号表初始值
+#define SYMBOL_TABLE_INITIAL_SIZE 16  //符号表初始值
 
 typedef struct Symbol {
     unsigned int hash;
     wchar* name;
     wchar* type;
     bool isOnlyRead;
+    bool isAllocHeap;  //address是否是解释中分配的内存
     void* address;       //地址
 } Symbol;
 typedef struct SymbolTable {
@@ -27,7 +28,27 @@ unsigned int getHashValue(const wchar*);    //获取字符串的哈希值(FNV-1a
 int resize(SymbolTable*);                                 //扩容
 int insert(Symbol*, SymbolTable*);                        //插入操作,插入元素是引用objCode的,由freeObjectCode释放,不用再写一个freeSymbleTable
 void delete(Symbol*, SymbolTable*);                       //删除操作
-
+int findSymbol(wchar* name, SymbolTable* table);          //查找
+void freeSymbolTable(SymbolTable* table) {
+    if(!table) return;
+    if(!(table->symbol)||table->sym_count==0) return;
+    for(int i = 0; i < table->size; i++) {
+        if(table->symbol[i].name) {
+            free(table->symbol[i].name);
+            table->symbol[i].name = NULL;
+        }
+        if(table->symbol[i].type) {
+            free(table->symbol[i].type);
+            table->symbol[i].type = NULL;
+        }
+        if(table->symbol[i].isAllocHeap) {
+            free(table->symbol[i].address);
+        }
+        table->symbol[i].address = NULL;
+    }
+    free(table->symbol);
+    return;
+}
 unsigned int getHashValue(const wchar* str) {
     if(str==NULL) return -1;
     int index = 0;
@@ -74,7 +95,7 @@ int insert(Symbol* sym, SymbolTable* table) {
     table->symbol[sym_index].address = sym->address;
     table->symbol[sym_index].isOnlyRead = sym->isOnlyRead;
 #ifdef SHOW_HX_DEBUG_DETAIL
-    wprintf(L"\33[33m[DEG]\33[0m已将符号\33[31m[%ls(%ls)]\33[0m插入符号表\n", table->symbol[sym_index].name, table->symbol[sym_index].type);
+    wprintf(L"\33[33m[DEG]\33[0m已将符号\33[36m[%ls(%ls)]\33[0m插入符号表\n", table->symbol[sym_index].name, table->symbol[sym_index].type);
 #endif
     return 0;
 }
@@ -104,5 +125,13 @@ int resize(SymbolTable* table) {
     wprintf(L"\33[33m[DEG]\33[0m符号表已扩容,当前容量：%d,已存储元素%d个\n",table->size, table->sym_count);
 #endif
     return 0;
+}
+int findSymbol(wchar* name, SymbolTable* table) {
+    if(table == NULL) return -1;
+    if(table->sym_count == 0) return -1;
+    if(name == NULL) return -1;
+    int index = (int)(getHashValue(name)%table->size);
+    if(table->symbol[index].name == NULL || table->symbol[index].type == NULL) return -1;
+    return index;
 }
 #endif
