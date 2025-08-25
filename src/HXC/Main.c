@@ -32,6 +32,7 @@ int main(int argc, char** argv) {
     wprintf(L"\33[36m[INFO]当前时间为：%s\n\33[0m", ctime(&now_time));
     wprintf(L"\33[36m[I]开始编译……\33[0m\n");
     wchar* data = getData(fileName);
+    initLocale();
     if(data == NULL) {
         exit(EXIT_FAILURE);
     }
@@ -81,6 +82,7 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
         return -1;
     }
+    initLocale();
     fflush(stdout);
     wprintf(L"\33[36m[I]编译完成\33[0m\n");
     freeCheckerOutput();
@@ -97,6 +99,7 @@ int main(int argc, char** argv) {
     wprintf(L"============================\n");
 #endif
     writeObjectFile("test.hxe");
+    initLocale();
     wprintf(L"\33[32m[I]已生成目标文件, 本次编译耗时%lfs\33[0m\n",(double)(clock() - start) / CLOCKS_PER_SEC);
     //printf("%ls\n", (wchar*)objCode.obj_fun[0].body[0].op_value[0].value.ptr_val);
     freeObjectCode(&objCode);
