@@ -60,6 +60,9 @@ int pushFunIntoStackFrame(ObjFunction* fun) {
     wprintf(L"\33[33m[DEG]\33[0m函数%ls已入栈(%p).\n", vm.stackFrame[vm.top_StackFrame].func->name, &(vm.stackFrame[vm.top_StackFrame]));
 #endif
     vm.top_StackFrame++;
+#ifdef SHOW_HX_DEBUG_DETAIL
+    wprintf(L"\t\33[33mTop--> stack[%d] %ls\33[0m\n", vm.top_StackFrame, (vm.top_StackFrame>=STACK_FRAME_SIZE_MAX)? L"\33[31m(溢出)\33[0m":L"\0");
+#endif
     return 0;
 }
 void popFunOutOfStackFrame(void) {
