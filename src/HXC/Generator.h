@@ -120,7 +120,7 @@ static int gen_function(_Function* ir_fun,Function* obj_fun) {
                     memset(&(localeSymTable[localeSymTable_index]), 0, sizeof(Symbol));
                     localeSymTable_size++;
                 }
-                int parseError=parseVariableDef(ir_fun->body, &ir_body_index, &(obj_fun->body), obj_fun->body_size, &obj_body_index, &(localeSymTable[localeSymTable_index]));
+                int parseError=parseVariableDef(ir_fun->body, &ir_body_index, &(obj_fun->body), &(obj_fun->body_size), &obj_body_index, &(localeSymTable[localeSymTable_index]));
                 if(parseError) {
                     freeSymbolTable(&localeSymTable, localeSymTable_size);
                     return parseError;
