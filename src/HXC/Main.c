@@ -9,6 +9,7 @@ FILE* errorStream = NULL;
 #include "Scanner.h"
 #include "Lexer.h"
 #include "Pass.h"
+#include "Generator.h"
 
 int main(int argc, char* argv[]) {
     clock_t start, end;

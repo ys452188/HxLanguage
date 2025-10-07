@@ -18,6 +18,7 @@ typedef struct _Symbol {  //变/常量符号
 typedef struct _Function {  //函数
     wchar_t* name;
     wchar_t* ret_type;   //为NULL表示返回值为void
+    int ret_type_arr_num;   //返回类型的数组层
     bool isRetTypeKnown;
     _Symbol* args;       //为NULL表示参数为空
     int args_size;
@@ -724,6 +725,31 @@ static int parseFunDef(Tokens* tokens, int* index, _Function* fun) {
         if(*index+1 >= tokens->count) {
             setError(ERR_FUN, tokens->tokens[*index].line, NULL);
             return 255;
+        }
+        (*index)++;
+        //分析数组
+        if(wcscmp(tokens->tokens[*index].value, L"{")!=0) {
+            if(wcscmp(tokens->tokens[*index].value, L"[")==0 || wcscmp(tokens->tokens[*index].value, L"【")==0) {
+                while(*index+1 < tokens->count) {
+                    fun->ret_type_arr_num++;
+                    (*index)++;
+                    if(wcscmp(tokens->tokens[*index].value, L"]")!=0 && wcscmp(tokens->tokens[*index].value, L"】")!=0) {
+                        setError(ERR_ARR_TYPE, tokens->tokens[*index].line, NULL);
+                        return 255;
+                    }
+                    if(*index+1 >= tokens->count) {
+                        setError(ERR_FUN, tokens->tokens[*index].line, NULL);
+                        return 255;
+                    }
+                    (*index)++;
+                    if(wcscmp(tokens->tokens[*index].value, L"{") == 0) break;
+                    else if(wcscmp(tokens->tokens[*index].value, L"[")==0 || wcscmp(tokens->tokens[*index].value, L"【")==0) continue;
+                    else {
+                        setError(ERR_ARR_TYPE, tokens->tokens[*index].line, NULL);
+                        return 255;
+                    }
+                }
+            }
         }
     } else if(wcscmp(tokens->tokens[*index].value, L"{") == 0) {
         fun->isRetTypeKnown = false;
