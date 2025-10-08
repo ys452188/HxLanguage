@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <wchar.h>
 #include <stdlib.h>
+#include <windows.h>
 #ifdef _WIN32
 int readSourceFile(const char* path, wchar_t** src) {
     FILE* fp = fopen(path, "rb");
@@ -16,6 +17,7 @@ int readSourceFile(const char* path, wchar_t** src) {
     fread(buf, 1, size, fp);
     buf[size] = '\0';
     fclose(fp);
+
     // 跳过 BOM（如果存在）
     if ((unsigned char)buf[0] == 0xEF &&
             (unsigned char)buf[1] == 0xBB &&
@@ -23,10 +25,17 @@ int readSourceFile(const char* path, wchar_t** src) {
         buf += 3;
         size -= 3;
     }
-    // 转为 wchar_t（UTF-8 → UTF-16/UTF-32）
-    size_t wlen = mbstowcs(NULL, buf, 0);
+
+    // 使用 MultiByteToWideChar 进行字符编码转换
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, buf, size, NULL, 0);
     *src = malloc((wlen + 1) * sizeof(wchar_t));
-    mbstowcs(*src, buf, wlen + 1);
+    if (*src == NULL) {
+        free(buf);
+        return -1;
+    }
+    MultiByteToWideChar(CP_UTF8, 0, buf, size, *src, wlen);
+    (*src)[wlen] = L'\0'; // 确保字符串以L'\0'结尾
+    free(buf);
     return 0;
 }
 #else

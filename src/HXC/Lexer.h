@@ -7,15 +7,15 @@
 #include <wctype.h>
 #include "Error.h"
 
-typedef enum TokenType {
+typedef enum HxTokenType {
     TOK_ID,            //标识符
     TOK_KW,            //关键字
     TOK_VAL,           //表面值
     TOK_OPR,           //操作符
     TOK_END,           //终结符
-} TokenType;
+} HxTokenType;
 typedef struct Token {
-    TokenType type;
+    HxTokenType type;
     wchar_t* value;
 #define CH  0
 #define STR 1
