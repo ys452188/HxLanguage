@@ -3,8 +3,9 @@
 #include <stdio.h>
 #include <wchar.h>
 #include <stdlib.h>
-#include <windows.h>
+
 #ifdef _WIN32
+#include <windows.h>
 int readSourceFile(const char* path, wchar_t** src) {
     FILE* fp = fopen(path, "rb");
     if (!fp) {

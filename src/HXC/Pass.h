@@ -688,7 +688,7 @@ static int parseFunDef(Tokens* tokens, int* index, _Function* fun) {
                 return 255;
             }
             (*index)++;
-            if(wcscmp(tokens->tokens[*index].value, L"它的返回值是")!=0) {
+            if(wcscmp(tokens->tokens[*index].value, L"它的返回类型是")!=0) {
                 setError(ERR_FUN, tokens->tokens[*index].line, NULL);
                 return 255;
             }
@@ -709,7 +709,7 @@ static int parseFunDef(Tokens* tokens, int* index, _Function* fun) {
         (*index)++;
         //复制返回类型
         fun->isRetTypeKnown=true;
-        if(wcscmp(tokens->tokens[*index].value, L"void")==0||wcscmp(tokens->tokens[*index].value, L"无参数")==0) {
+        if(wcscmp(tokens->tokens[*index].value, L"void")==0||wcscmp(tokens->tokens[*index].value, L"无返回值")==0) {
             fun->ret_type = NULL;
 #ifdef HX_DEBUG
             log(L"无返回值");

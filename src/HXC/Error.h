@@ -26,6 +26,7 @@ typedef enum ErrorType {
     ERR_MAIN,
     ERR_COUNLD_NOT_FIND_PARENT,
     ERR_UNKOWN_TYPE,
+    ERR_NO_MAIN,
 } ErrorType;
 
 void initLocale(void) {
@@ -137,6 +138,11 @@ void setError(ErrorType e, int errorLine, wchar_t* errCode) {
 
     case ERR_UNKOWN_TYPE: {
         swprintf(errorMessageBuffer, ERROR_BUF_SIZE, L"\33[31m[ERR]未知类型！\33[0m(位于第%d行)\n\33[36m[NOTE]\33[0m 似乎没有这个类型->%ls\n", errorLine,errCode);
+        break;
+    }
+
+    case ERR_NO_MAIN: {
+        swprintf(errorMessageBuffer, ERROR_BUF_SIZE, L"\33[31m[ERR]缺少主函数！\33[0m\n");
         break;
     }
     }

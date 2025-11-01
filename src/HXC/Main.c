@@ -77,7 +77,25 @@ int main(int argc, char* argv[]) {
     }
     fwprintf(outputStream, L"\33[34m[INFO]\33[0m第一次遍历完成\n");
     freeTokens(&tokens);
-
+    //生成目标代码
+    HxCode* object = (HxCode*)calloc(1, sizeof(HxCode));
+    if(!object) {
+        freeIR_1(&ir_1);
+        return -1;
+    }
+    int genErr = gen(ir_1, object);
+    if(genErr == -1) {
+        fwprintf(errorStream, L"\33[31m[ERR]\33[0m内存分配失败！\n");
+        freeIR_1(&ir_1);
+        return -1;
+    }
+    if(genErr == 255) {
+        fwprintf(errorStream, L"%ls\n", errorMessageBuffer);
+        fwprintf(outputStream, L"\33[31m[ERR]\33[0m编译失败。\n");
+        freeIR_1(&ir_1);
+        return 255;
+    }
+    freeObject(&object);
     freeIR_1(&ir_1);
     end = clock();
     fwprintf(outputStream, L"\33[34m[INFO]\33[0m编译完成。共耗时%lfs\n", (double)(end - start) / CLOCKS_PER_SEC);

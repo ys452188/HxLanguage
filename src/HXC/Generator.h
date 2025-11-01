@@ -1,4 +1,4 @@
-//优化&目标代码生成
+//目标代码生成
 #ifndef HXLANG_GENERATOR_H
 #define HXLANG_GENERATOR_H
 #include <stdbool.h>
@@ -9,14 +9,6 @@
 #include "Lexer.h"
 #include "Pass.h"
 #include "Error.h"
-typedef struct Symbol {
-    int used_time;        //被访问的次数,方便优化。从未被访问过则不生成相关代码
-    wchar_t* name;
-    wchar_t* type;     //为NULL表示该变量类型尚未明确
-    int type_arr_num;
-    bool isOnlyRead;
-    int def_command_index;  //定义它的北令的索引
-} Symbol;
 typedef enum OpCode {   //指令码
     ADD,   //加
     SUB,   //减
@@ -25,146 +17,505 @@ typedef enum OpCode {   //指令码
     MOVE,   //赋值
     PUSH,   //压栈
     CALL,   //调用函数
+    LOAD,   //加载变量到栈       LOAD <size>
 } OpCode;
+typedef struct OpArgument {  //操作数
+    enum {
+        INT,
+        CHAR,
+        STRING,
+        FLOAT,
+        DOUBLE,
+        INDEX,
+        TYPE,
+    } type;
+    union {
+        uint32_t index;
+        int32_t i32_val;
+        wchar_t* string;
+        wchar_t ch;
+        float float_val;
+        double double_val;
+        char only_type;   //仅用于表示类型
+    } value;
+} OpArgument;
 typedef struct Command { //指令
     OpCode op;
+    OpArgument* args;
+    uint8_t args_size;
 } Command;
+typedef struct Symbol {
+    wchar_t* name;
+    wchar_t* type;
+    int type_arr_num;
+    bool isOnlyRead;
+    bool isUsed;
+    int sp;    //栈中的位置
+    int cmd_index;   //加载它的指令的位置,确定变量类型后记得改它
+} Symbol;
 typedef struct Function {
-    int used_time;
+    bool isUseless;  //是否无用
+
     wchar_t* name;
     wchar_t* ret_type;
-    int ret_type_arr_num;
-    bool isRetTypeKnown;
+    uint32_t ret_type_arr_num;
     Symbol* args;
-    int args_size;
+    uint32_t args_size;
+
     Command* body;
-    int body_size;
+    uint32_t body_size;
 } Function;
-static int parseExpression(Tokens*, int* index,Command** obj_fun_body, int* obj_fun_body_size, int* obj_body_index);   //分析表达式
-static int parseVariableDef(Tokens*, int* ir_index, Command** obj_fun_body, int* obj_fun_body_size, int* obj_body_index, Symbol*);
-static int gen_function(_Function* ir_fun,Function* obj_fun);
-static void freeSymbolTable(Symbol** sym, int sym_size) {
-    if(!sym) return;
-    for(int i = 0; i<sym_size; i++) {
-        if((*sym)[i].name) free((*sym)[i].name);
-        (*sym)[i].name = NULL;
-        if((*sym)[i].type) free((*sym)[i].type);
-        (*sym)[i].type = NULL;
+typedef struct HxCode {
+    Function* funs;
+    uint32_t funs_size;
+} HxCode;
+static int genFunction(_Function* fun, Function* obj, Function* table, int table_size);
+extern int gen(IR_1* ir, HxCode* obj) {
+    if(!ir | !obj) return -1;
+    if(ir->funcs == NULL||ir->funcs_size == 0) {
+        setError(ERR_NO_MAIN, 0, NULL);
+        return 255;
     }
-    free(*sym);
-    *sym = NULL;
+    //编译函数
+    obj->funs = (Function*)calloc(ir->funcs_size, sizeof(Function));
+    if(!(obj->funs)) return -1;
+    //先复制声明
+#ifdef HX_DEBUG
+    log(L"复制函数声明");
+#endif
+    for(int i = 0; i < ir->funcs_size; i++) {
+        //名
+        obj->funs[i].name = (wchar_t*)calloc(wcslen(ir->funcs[i].name)+1, sizeof(wchar_t));
+        if(!(obj->funs[i].name)) return -1;
+        wcscpy(obj->funs[i].name, ir->funcs[i].name);
+#ifdef HX_DEBUG
+        fwprintf(logStream, L"\33[33m[DEG]复制函数声明 %ls\n\33[0m", obj->funs[i].name);
+#endif
+        //返
+        obj->funs[i].ret_type = NULL;
+        if(ir->funcs[i].ret_type != NULL) {
+            obj->funs[i].ret_type = (wchar_t*)calloc(wcslen(ir->funcs[i].ret_type)+1, sizeof(wchar_t));
+            if(!(obj->funs[i].ret_type)) {
+                return -1;
+            }
+            wcscpy(obj->funs[i].ret_type, ir->funcs[i].ret_type);
+        }
+        obj->funs[i].ret_type_arr_num = ir->funcs[i].ret_type_arr_num;
+        //参
+        obj->funs[i].args = NULL;
+        obj->funs[i].args_size = ir->funcs[i].args_size;
+        if(ir->funcs[i].args!=NULL) {
+            obj->funs[i].args = (Symbol*) calloc(obj->funs[i].args_size, sizeof(Symbol));
+            if(!(obj->funs[i].args)) {
+                return -1;
+            }
+            for(int j = 0; j < obj->funs[i].args_size; j++) {
+                obj->funs[i].args[j].name = (wchar_t*)calloc(wcslen(ir->funcs[i].args[j].name)+1, sizeof(wchar_t));
+                if(!(obj->funs[i].args[j].name)) {
+                    return -1;
+                }
+                wcscpy(obj->funs[i].args[j].name, ir->funcs[i].args[j].name);
+                obj->funs[i].args[j].type = (wchar_t*)calloc(wcslen(ir->funcs[i].args[j].type)+1, sizeof(wchar_t));
+                if(!(obj->funs[i].args[j].type)) {
+                    return -1;
+                }
+                wcscpy(obj->funs[i].args[j].type, ir->funcs[i].args[j].type);
+                obj->funs[i].args[j].type_arr_num = ir->funcs[i].args[j].array_num;
+            }
+        }
+    }
+#ifdef HX_DEBUG
+    log(L"生成函数体的目标代码");
+#endif
+    for(int i = 0; i < ir->funcs_size; i++) {
+        int err = genFunction(&(ir->funcs[i]), &(obj->funs[i]), obj->funs, obj->funs_size);
+        if(err) return err;
+    }
+    return 0;
+}
+static void freeSymbolTable(Symbol* table, int size) {
+    if(!table) return;
+    for(int i = 0; i < size; i++) {
+        if(table[i].name) {
+            free(table[i].name);
+            table[i].name = NULL;
+        }
+        if(table[i].type) {
+            free(table[i].type);
+            table[i].type = NULL;
+        }
+    }
+    free(table);
+    table = NULL;
     return;
 }
-static int gen_function(_Function* ir_fun,Function* obj_fun) {
-    if(!ir_fun || !obj_fun) return -1;
-    //复制函数名
-    obj_fun->name = (wchar_t*)calloc(wcslen(ir_fun->name)+1, sizeof(wchar_t));
-    if(!(obj_fun->name)) return -1;
-    wcscpy(obj_fun->name, ir_fun->name);
-    //复制返回类型
-    if(ir_fun->isRetTypeKnown) {
-        if(ir_fun->ret_type != NULL) {
-            obj_fun->ret_type = (wchar_t*)calloc(wcslen(ir_fun->ret_type)+1, sizeof(wchar_t));
-            if(!(obj_fun->ret_type)) return -1;
-            wcscpy(obj_fun->ret_type, ir_fun->ret_type);
-            obj_fun->ret_type_arr_num = ir_fun->ret_type_arr_num;
-        } else {
-            obj_fun->ret_type = NULL;
-        }
-    } else {
-        obj_fun->isRetTypeKnown=false;
-        obj_fun->ret_type = NULL;
-    }
-    //复制参数
-    if(ir_fun->args == NULL || ir_fun->args_size==0) {
-        obj_fun->args = NULL;
-        obj_fun->args_size = 0;
-    } else {
-        obj_fun->args_size = ir_fun->args_size;
-        obj_fun->args = (Symbol*)calloc(obj_fun->args_size, sizeof(Symbol));
-        if(!(obj_fun->args))return -1;
-        for(int i = 0; i < obj_fun->args_size; i++) {
-            obj_fun->args[i].name = (wchar_t*)calloc(wcslen(ir_fun->args[i].name)+1, sizeof(wchar_t));
-            if(!(obj_fun->args[i].name)) return -1;
-            wcscpy(obj_fun->args[i].name, ir_fun->args[i].name);
-            obj_fun->args[i].type = (wchar_t*)calloc(wcslen(ir_fun->args[i].type)+1, sizeof(wchar_t));
-            if(!(obj_fun->args[i].type)) return -1;
-            wcscpy(obj_fun->args[i].type, ir_fun->args[i].type);
-            obj_fun->args[i].type_arr_num = ir_fun->args[i].array_num;
-        }
-    }
-    //分析函数体
-    if(ir_fun->body == NULL) {
-        obj_fun->body = NULL;
-    } else {
-        Symbol* localeSymTable = NULL;   //局部符号表
-        int localeSymTable_size = 0;
-        int localeSymTable_index = 0;
-        int ir_body_index = 0;
-        int obj_body_index = 0;
-        while(ir_body_index < ir_fun->body->size) {
-            if(wcscmp(ir_fun->body->tokens[ir_body_index].value, L"var")==0||wcscmp(ir_fun->body->tokens[ir_body_index].value, L"con")==0
-                    || wcscmp(ir_fun->body->tokens[ir_body_index].value, L"定义变量")==0||wcscmp(ir_fun->body->tokens[ir_body_index].value, L"定义常量")==0) {
-                if(localeSymTable) {
-                    localeSymTable_size = 1;
-                    localeSymTable = (Symbol*)calloc(localeSymTable_size, sizeof(Symbol));
-                    if(!localeSymTable) return -1;
-                }
-                if(localeSymTable_index >= localeSymTable_size) {
-                    void* temp = realloc(localeSymTable, (localeSymTable_size+1)*sizeof(Symbol));
-                    if(!temp) {
-                        freeSymbolTable(&localeSymTable, localeSymTable_size);
-                        return -1;
-                    }
-                    localeSymTable=(Symbol*)temp;
-                    memset(&(localeSymTable[localeSymTable_index]), 0, sizeof(Symbol));
-                    localeSymTable_size++;
-                }
-                int parseError=parseVariableDef(ir_fun->body, &ir_body_index, &(obj_fun->body), &(obj_fun->body_size), &obj_body_index, &(localeSymTable[localeSymTable_index]));
-                if(parseError) {
-                    freeSymbolTable(&localeSymTable, localeSymTable_size);
-                    return parseError;
-                }
-                localeSymTable_index++;
-            }
-            ir_body_index++;
-        }
-    }
-}
-static int parseVariableDef(Tokens* tokens, int* index, Command** obj_fun_body, int* obj_fun_body_size, int* obj_body_index, Symbol* sym) {
-    if(!tokens||!index||!obj_fun_body||!obj_fun_body_size||!obj_body_index) return -1;
-    if(wcscmp(tokens->tokens[*index].value, L"con")==0 || wcscmp(tokens->tokens[*index].value, L"定义常量")==0) sym->isOnlyRead = true;
-    if(wcscmp(tokens->tokens[*index].value, L"定义常量")==0 || wcscmp(tokens->tokens[*index].value, L"定义变量")==0) {
-        if((*index)+1 >= tokens->size) {
-            setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
+static int genVarDef(Tokens* tokens, int* index, Command** cmd, int* cmd_index, int* cmd_size, Symbol* sym) {
+    if(tokens == NULL || index == NULL || !cmd_index || !cmd_size) return -1;
+#ifdef HX_DEBUG
+    log(L"分析变量的定义");
+#endif
+    sym->isOnlyRead = false;
+    //var:<id> "->" <id>|<kw>   var:v1->int
+    bool isOnlyRead = false;
+    if(wcscmp(tokens->tokens[*index].value, L"con") == 0 || wcscmp(tokens->tokens[*index].value, L"定义常量") == 0) isOnlyRead = true;
+    if(wcscmp(tokens->tokens[*index].value, L"var") == 0 || wcscmp(tokens->tokens[*index].value, L"con") == 0) {
+        if(*index >= tokens->count) {
+            setError(ERR_NO_SYM_NAME, tokens->tokens[*index].line, NULL);
             return 255;
         }
         (*index)++;
-        if(wcscmp(tokens->tokens[*index].value, L":")!=0 &&wcscmp(tokens->tokens[*index].value, L"：")!=0) {
+        //var : <id>
+        //    ^
+        if(wcscmp(tokens->tokens[*index].value, L":")!=0 && wcscmp(tokens->tokens[*index].value, L"：")!=0) {
             setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
             return 255;
         }
-        if((*index)+1 >= tokens->size) {
-            setError(ERR_NO_SYM_TYPE, tokens->tokens[*index].line, NULL);
+        if(*index >= tokens->count) {
+            setError(ERR_NO_SYM_NAME, tokens->tokens[*index].line, NULL);
             return 255;
         }
         (*index)++;
-        //分析变量名
+        //wprintf(L"value:%ls\n", tokens->tokens[*index].value);
+        //变量名
         if(tokens->tokens[*index].type != TOK_ID) {
-            setError(ERR_NO_SYM_TYPE, tokens->tokens[*index].line, NULL);
+            setError(ERR_NO_SYM_NAME, tokens->tokens[*index].line, NULL);
             return 255;
         }
         sym->name = (wchar_t*)calloc(wcslen(tokens->tokens[*index].value)+1, sizeof(wchar_t));
-        if(!(sym->name)) return -1;
+        if(!sym->name) return -1;
         wcscpy(sym->name, tokens->tokens[*index].value);
-        //(分析类型|分析右值|结束) & 生成指令
-        if((*index)+1 >= tokens->size) {
+#ifdef HX_DEBUG
+        fwprintf(logStream, L"\33[33m[DEB]已复制变量名(\"%ls\")\n\33[0m", sym->name);
+#endif
+        if(*index >= tokens->count) {
+            setError(ERR_NO_END, tokens->tokens[*index].line, tokens->tokens[tokens->count-1].value);
+            return 255;
+        }
+        (*index)++;
+        //结束
+        if(tokens->tokens[*index].type == TOK_END) {
+            sym->type = NULL;
+            //生成load指令  (    load <size>     )
+            if(*cmd == NULL) {
+                *cmd = (Command*)calloc(1, sizeof(Command));
+                if(!(*cmd)) return -1;
+                *cmd_size = 1;
+            }
+            if(*cmd_size <= *cmd_index) {
+                *cmd_size = *cmd_index+1;
+                void* temp = realloc(*cmd, sizeof(Command)*(*cmd_size));
+                if(!temp) return -1;
+                *cmd = (Command*)temp;
+                memset(&(*cmd[*cmd_index]), 0, sizeof(Command));
+            }
+            (*cmd)[*cmd_index].args = (OpArgument*)calloc(1, sizeof(OpArgument));
+            if(!((*cmd)[*cmd_index].args)) return -1;
+            (*cmd)[*cmd_index].args_size = 1;
+            (*cmd)[*cmd_index].args[0].type = INT;
+            //确定变量大小
+            //类型未知,暂不处理
+            sym->cmd_index = *cmd_index;
+#ifdef HX_DEBUG
+            fwprintf(logStream, L"\33[33m[DEB]已生成指令load %d(类型未知)\n\33[0m", (int)((*cmd)[*cmd_index].args[0].value.i32_val));
+#endif
+            (*cmd_index)++;
+            return 0;
+        } else if(wcscmp(tokens->tokens[*index].value, L"->")==0 ) {  //分析类型
+            if(*index >= tokens->count) {
+                setError(ERR_NO_SYM_TYPE, tokens->tokens[*index].line, tokens->tokens[tokens->count-1].value);
+                return 255;
+            }
+            (*index)++;
+            if(tokens->tokens[*index].type != TOK_ID && tokens->tokens[*index].type != TOK_KW) {
+                setError(ERR_NO_SYM_TYPE, tokens->tokens[*index].line, tokens->tokens[tokens->count-1].value);
+                return 255;
+            }
+            sym->type = (wchar_t*)calloc(wcslen(tokens->tokens[*index].value)+1, sizeof(wchar_t));
+            if(!sym->type) return -1;
+            wcscpy(sym->type, tokens->tokens[*index].value);
+#ifdef HX_DEBUG
+            fwprintf(logStream, L"\33[33m[DEB]已复制变量类型(\"%ls\")\n\33[0m", sym->type);
+#endif
+            if(*index >= tokens->count) {
+                setError(ERR_NO_END, tokens->tokens[tokens->count-1].line, tokens->tokens[tokens->count-1].value);
+                return 255;
+            }
+            (*index)++;
+            //数组
+            if(wcscmp(tokens->tokens[*index].value, L"[")==0 || wcscmp(tokens->tokens[*index].value, L"【")==0) {
+                sym->type_arr_num++;
+                while(*index+1 < tokens->count) {
+                    (*index)++;
+                    if(wcscmp(tokens->tokens[*index].value, L"]") != 0   && wcscmp(tokens->tokens[*index].value, L"】") != 0) {
+                        setError(ERR_ARR_TYPE, tokens->tokens[*index].line, NULL);
+                        return 255;
+                    }
+                    if(*index+1 >= tokens->count) {
+                        setError(ERR_NO_END, tokens->tokens[*index].line, tokens->tokens[*index].value);
+                        return 255;
+                    }
+                    (*index)++;
+                    if(tokens->tokens[*index].type == TOK_END) break;
+                    if(wcscmp(tokens->tokens[*index].value, L"[")==0 || wcscmp(tokens->tokens[*index].value, L"【")==0) sym->type_arr_num++;
+                }
+            }
+            if(tokens->tokens[*index].type != TOK_END && !(wcscmp(tokens->tokens[*index].value, L"=")==0)) {
+                setError(ERR_NO_END, tokens->tokens[*index-1].line, tokens->tokens[*index-1].value);
+                return 255;
+            }
+#ifdef HX_DEBUG
+            fwprintf(logStream, L"\33[33m[DEB]数组维数%d\n\33[0m", sym->type_arr_num);
+#endif
+        } else if(tokens->tokens[*index].type != TOK_END && !(wcscmp(tokens->tokens[*index].value, L"=")==0)) {
+            setError(ERR_NO_END, tokens->tokens[*index].line, tokens->tokens[tokens->count-2].value);
+            return 255;
+        }
+    } else if(wcscmp(tokens->tokens[*index].value, L"定义变量") == 0 || wcscmp(tokens->tokens[*index].value, L"定义常量") == 0) {    //定义变量：<id>,它的类型是：<id>|<kw>;
+        if(*index >= tokens->count) {
+            setError(ERR_NO_SYM_NAME, tokens->tokens[*index].line, NULL);
+            return 255;
+        }
+        (*index)++;
+        //var : <id>
+        //    ^
+        if(wcscmp(tokens->tokens[*index].value, L":")!=0 && wcscmp(tokens->tokens[*index].value, L"：")!=0) {
             setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
             return 255;
         }
-        if(tokens->tokens[*index].type==TOK_END) {
+        if(*index >= tokens->count) {
+            setError(ERR_NO_SYM_NAME, tokens->tokens[*index].line, NULL);
+            return 255;
+        }
+        (*index)++;
+        //wprintf(L"value:%ls\n", tokens->tokens[*index].value);
+        //变量名
+        if(tokens->tokens[*index].type != TOK_ID) {
+            setError(ERR_NO_SYM_NAME, tokens->tokens[*index].line, NULL);
+            return 255;
+        }
+        sym->name = (wchar_t*)calloc(wcslen(tokens->tokens[*index].value)+1, sizeof(wchar_t));
+        if(!sym->name) return -1;
+        wcscpy(sym->name, tokens->tokens[*index].value);
+#ifdef HX_DEBUG
+        fwprintf(logStream, L"\33[33m[DEB]已复制变量名(\"%ls\")\n\33[0m", sym->name);
+#endif
+        if(*index >= tokens->count) {
+            setError(ERR_NO_END, tokens->tokens[*index].line, tokens->tokens[tokens->count-1].value);
+            return 255;
+        }
+        (*index)++;
+        //结束
+        if(tokens->tokens[*index].type == TOK_END) {
+            sym->type = NULL;
+            //生成load指令  (    load <size>     )
+            if(*cmd == NULL) {
+                *cmd = (Command*)calloc(1, sizeof(Command));
+                if(!(*cmd)) return -1;
+                *cmd_size = 1;
+            }
+            if(*cmd_size <= *cmd_index) {
+                *cmd_size = *cmd_index+1;
+                void* temp = realloc(*cmd, sizeof(Command)*(*cmd_size));
+                if(!temp) return -1;
+                *cmd = (Command*)temp;
+                memset(&(*cmd[*cmd_index]), 0, sizeof(Command));
+            }
+            (*cmd)[*cmd_index].args = (OpArgument*)calloc(1, sizeof(OpArgument));
+            if(!((*cmd)[*cmd_index].args)) return -1;
+            (*cmd)[*cmd_index].args_size = 1;
+            (*cmd)[*cmd_index].args[0].type = INT;
+            //确定变量大小
+            //类型未知,暂不处理
+            sym->cmd_index = *cmd_index;
+#ifdef HX_DEBUG
+            fwprintf(logStream, L"\33[33m[DEB]已生成指令load %d(类型未知)\n\33[0m", (int)((*cmd)[*cmd_index].args[0].value.i32_val));
+#endif
+            (*cmd_index)++;
+            return 0;
+        } else if(wcscmp(tokens->tokens[*index].value, L",")==0) {  //分析类型
+            if(*index >= tokens->count) {
+                setError(ERR_NO_SYM_TYPE, tokens->tokens[*index].line, tokens->tokens[tokens->count-1].value);
+                return 255;
+            }
+            (*index)++;
+            if(wcscmp(tokens->tokens[*index].value, L"它的类型是") != 0) {
+                setError(ERR_NO_SYM_TYPE, tokens->tokens[*index].line, tokens->tokens[tokens->count-1].value);
+                return 255;
+            }
+            if(*index >= tokens->count) {
+                setError(ERR_NO_SYM_TYPE, tokens->tokens[*index].line, tokens->tokens[tokens->count-1].value);
+                return 255;
+            }
+            (*index)++;
+            if(wcscmp(tokens->tokens[*index].value, L":") != 0 && wcscmp(tokens->tokens[*index].value, L"：") != 0) {
+                setError(ERR_NO_SYM_TYPE, tokens->tokens[*index].line, tokens->tokens[tokens->count-1].value);
+                return 255;
+            }
+            if(*index >= tokens->count) {
+                setError(ERR_NO_SYM_TYPE, tokens->tokens[*index].line, tokens->tokens[tokens->count-1].value);
+                return 255;
+            }
+            (*index)++;
+            if(tokens->tokens[*index].type != TOK_ID && tokens->tokens[*index].type != TOK_KW) {
+                setError(ERR_NO_SYM_TYPE, tokens->tokens[*index].line, tokens->tokens[tokens->count-1].value);
+                return 255;
+            }
+            sym->type = (wchar_t*)calloc(wcslen(tokens->tokens[*index].value)+1, sizeof(wchar_t));
+            if(!sym->type) return -1;
+            wcscpy(sym->type, tokens->tokens[*index].value);
+#ifdef HX_DEBUG
+            fwprintf(logStream, L"\33[33m[DEB]已复制变量类型(\"%ls\")\n\33[0m", sym->type);
+#endif
+            if(*index >= tokens->count) {
+                setError(ERR_NO_END, tokens->tokens[tokens->count-1].line, tokens->tokens[tokens->count-1].value);
+                return 255;
+            }
+            (*index)++;
+            //数组
+            if(wcscmp(tokens->tokens[*index].value, L"[")==0 || wcscmp(tokens->tokens[*index].value, L"【")==0) {
+                sym->type_arr_num++;
+                while(*index+1 < tokens->count) {
+                    (*index)++;
+                    if(wcscmp(tokens->tokens[*index].value, L"]") != 0   && wcscmp(tokens->tokens[*index].value, L"】") != 0) {
+                        setError(ERR_ARR_TYPE, tokens->tokens[*index].line, NULL);
+                        return 255;
+                    }
+                    if(*index+1 >= tokens->count) {
+                        setError(ERR_NO_END, tokens->tokens[*index].line, tokens->tokens[*index].value);
+                        return 255;
+                    }
+                    (*index)++;
+                    if(tokens->tokens[*index].type == TOK_END) break;
+                    if(wcscmp(tokens->tokens[*index].value, L"[")==0 || wcscmp(tokens->tokens[*index].value, L"【")==0) sym->type_arr_num++;
+                }
+            }
+            if(tokens->tokens[*index].type != TOK_END && !(wcscmp(tokens->tokens[*index].value, L"=")==0)) {
+                setError(ERR_NO_END, tokens->tokens[*index-1].line, tokens->tokens[*index-1].value);
+                return 255;
+            }
+#ifdef HX_DEBUG
+            fwprintf(logStream, L"\33[33m[DEB]数组维数%d\n\33[0m", sym->type_arr_num);
+#endif
+        } else if(tokens->tokens[*index].type != TOK_END && !(wcscmp(tokens->tokens[*index].value, L"=")==0)) {
+            setError(ERR_NO_END, tokens->tokens[*index].line, tokens->tokens[tokens->count-2].value);
+            return 255;
+        }
+    }
+    //生成load指令  (    load <size>     )
+#ifdef HX_DEBUG
+    log(L"生成load指令");
+#endif
+    if(*cmd == NULL) {
+        *cmd = (Command*)calloc(1, sizeof(Command));
+        if(!(*cmd)) return -1;
+        *cmd_size = 1;
+    }
+    if(*cmd_size <= *cmd_index) {
+        *cmd_size = *cmd_index+1;
+        void* temp = realloc(*cmd, sizeof(Command)*(*cmd_size));
+        if(!temp) return -1;
+        *cmd = (Command*)temp;
+        memset(&(*cmd[*cmd_index]), 0, sizeof(Command));
+    }
+    (*cmd)[*cmd_index].args = (OpArgument*)calloc(1, sizeof(OpArgument));
+    if(!((*cmd)[*cmd_index].args)) return -1;
+    (*cmd)[*cmd_index].args_size = 1;
+    (*cmd)[*cmd_index].args[0].type = INT;
+
+
+
+    //确定变量大小
+    sym->cmd_index = *cmd_index;
+    if(sym->type != NULL) {
+        if(wcscmp(sym->type, L"int")==0 || wcscmp(sym->type, L"整型")==0) {
+            (*cmd)[*cmd_index].args[0].value.i32_val = sizeof(int32_t);
+        } else if(wcscmp(sym->type, L"char")==0 || wcscmp(sym->type, L"字符型")==0) {
+            (*cmd)[*cmd_index].args[0].value.i32_val = sizeof(uint16_t);
+        } else {
 
         }
     }
+
+
+
+
+#ifdef HX_DEBUG
+    fwprintf(logStream, L"\33[33m[DEB]已生成指令load %d\n\33[0m", (int)((*cmd)[*cmd_index].args[0].value.i32_val));
+#endif
+    (*cmd_index)++;
+    sym->isOnlyRead = isOnlyRead;
+    return 0;
+}
+//生成函数的目标代码
+static int genFunction(_Function* fun, Function* obj, Function* table, int table_size) {
+    if(!obj) return -1;
+    if(fun==NULL) return -1;
+#ifdef HX_DEBUG
+    fwprintf(logStream, L"\33[33m[DEB]=========分析函数(%ls)=========\n\33[0m", fun->name);
+#endif
+    Symbol* localeTable = NULL;
+    int localeTable_size = 0;
+    int localeTable_index = 0;
+    //将参数加入局部符号表
+    if(fun->args!=NULL) {
+        localeTable_size = fun->args_size;
+        localeTable = (Symbol*)calloc(localeTable_size, sizeof(Symbol));
+        if(!localeTable) return -1;
+        for(localeTable_index = 0; localeTable_index < localeTable_size; localeTable_index++) {
+            localeTable[localeTable_index].name = (wchar_t*)calloc(wcslen(fun->args[localeTable_index].name)+1, sizeof(wchar_t));
+            if(!localeTable[localeTable_index].name) {
+                freeSymbolTable(localeTable, localeTable_size);
+                return -1;
+            }
+            wcscpy(localeTable[localeTable_index].name, fun->args[localeTable_index].name);
+            localeTable[localeTable_index].type = (wchar_t*)calloc(wcslen(fun->args[localeTable_index].type)+1, sizeof(wchar_t));
+            if(!localeTable[localeTable_index].type) {
+                freeSymbolTable(localeTable, localeTable_size);
+                return -1;
+            }
+            wcscpy(localeTable[localeTable_index].type, fun->args[localeTable_index].type);
+            localeTable[localeTable_index].type_arr_num = fun->args[localeTable_index].array_num;
+        }
+    } else {
+        localeTable = (Symbol*)calloc(1, sizeof(Symbol));
+        if(!localeTable) return -1;
+        localeTable_size = 1;
+    }
+    if(fun->body == NULL) {
+        obj->isUseless = true;
+    } else {
+        int body_index = 0;
+        int obj_body_index = 0;
+        while(body_index < fun->body->count) {
+            if(wcscmp(fun->body->tokens[body_index].value, L"var")==0||wcscmp(fun->body->tokens[body_index].value, L"con")==0 ||
+                    wcscmp(fun->body->tokens[body_index].value, L"定义变量")==0|| wcscmp(fun->body->tokens[body_index].value, L"定义常量")==0) {
+                if(localeTable_size <= localeTable_index) {
+                    void* temp = realloc(localeTable, (localeTable_index+1)*sizeof(Symbol));
+                    if(!temp) {
+                        freeSymbolTable(localeTable, localeTable_size);
+                        return -1;
+                    }
+                    localeTable_size = localeTable_index+1;
+                    localeTable = (Symbol*)temp;
+                    memset(&(localeTable[localeTable_index]), 0, sizeof(Symbol));
+                }
+                int err = genVarDef(fun->body, &body_index, &(obj->body), &obj_body_index, &(obj->body_size), &(localeTable[localeTable_index]));
+                if(err) return err;
+                localeTable_index++;
+            } else {
+                body_index++;
+            }
+        }
+    }
+    freeSymbolTable(localeTable, localeTable_size);
+    return 0;
+}
+void freeObject(HxCode** obj) {
+    if(!obj) return;
+    if(*obj) {
+        free(*obj);
+    }
+    *obj = NULL;
+    return;
 }
 #endif
