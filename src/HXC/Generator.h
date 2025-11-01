@@ -9,6 +9,7 @@
 #include "Lexer.h"
 #include "Pass.h"
 #include "Error.h"
+#include "Parser.h"
 typedef enum OpCode {   //指令码
     ADD,   //加
     SUB,   //减
@@ -431,8 +432,8 @@ static int genVarDef(Tokens* tokens, int* index, Command** cmd, int* cmd_index, 
             (*cmd)[*cmd_index].args[0].value.i32_val = sizeof(int32_t);
         } else if(wcscmp(sym->type, L"char")==0 || wcscmp(sym->type, L"字符型")==0) {
             (*cmd)[*cmd_index].args[0].value.i32_val = sizeof(uint16_t);
-        } else {
-
+        } else if(wcscmp(sym->type, L"str")==0 || wcscmp(sym->type, L"字符串型")==0) {
+            (*cmd)[*cmd_index].args[0].value.string = NULL;
         }
     }
 
@@ -502,6 +503,16 @@ static int genFunction(_Function* fun, Function* obj, Function* table, int table
                 int err = genVarDef(fun->body, &body_index, &(obj->body), &obj_body_index, &(obj->body_size), &(localeTable[localeTable_index]));
                 if(err) return err;
                 localeTable_index++;
+            } else if(fun->body->tokens[body_index].type == TOK_ID) {
+                if(body_index+1 >= fun->body->count) {
+                    setError(ERR_NO_END, fun->body->tokens[body_index].line, fun->body->tokens[body_index].value);
+                    return 255;
+                }
+                body_index++;
+                if(fun->body->tokens[body_index].type == TOK_END) {   //ID;  啥用也没
+                    body_index++;
+                    continue;
+                }
             } else {
                 body_index++;
             }
