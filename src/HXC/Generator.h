@@ -494,6 +494,19 @@ static int genVarDef(Tokens* tokens, int* index, Command** cmd, int* cmd_index,
     } else if (wcscmp(sym->type, L"str") == 0 ||
                wcscmp(sym->type, L"字符串型") == 0) {
       (*cmd)[*cmd_index].args[0].value.string = NULL;
+    } else if (wcscmp(sym->type, L"float") == 0 ||
+               wcscmp(sym->type, L"浮点型") == 0) {
+      (*cmd)[*cmd_index].args[0].value.i32_val = sizeof(float);
+    } else if (wcscmp(sym->type, L"double") == 0 ||
+               wcscmp(sym->type, L"精确浮点型") == 0) {
+      (*cmd)[*cmd_index].args[0].value.i32_val = sizeof(double);
+    } else {
+      
+
+      
+    }
+    if(sym->type_arr_num > 0) {
+      (*cmd)[*cmd_index].args[0].value.i32_val*= sym->type_arr_num;
     }
   }
 
