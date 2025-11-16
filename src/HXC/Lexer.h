@@ -84,6 +84,7 @@ Tokens* lex(wchar_t* src, int* err) {
       log(L"tokens大小增加了");
 #endif
     }
+    tokens->tokens[token_index].mark = -1;
     if (src[index_src] == L'\n') line++;
     if (iswspace(src[index_src])) continue;
     if (src[index_src] == L'\'' || src[index_src] == L'‘' ||

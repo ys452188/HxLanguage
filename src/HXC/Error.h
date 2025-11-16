@@ -27,6 +27,9 @@ typedef enum ErrorType {
   ERR_COUNLD_NOT_FIND_PARENT,
   ERR_UNKOWN_TYPE,
   ERR_NO_MAIN,
+  ERR_CANNOT_FIND_SYMBOL,
+  ERR_EXP,
+  ERR_OUT_OF_VALUE,  // 数值溢出
 } ErrorType;
 
 void initLocale(void) {
@@ -223,6 +226,27 @@ void setError(ErrorType e, int errorLine, wchar_t* errCode) {
     case ERR_NO_MAIN: {
       swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
                L"\33[31m[ERR]缺少主函数！\33[0m\n");
+      break;
+    }
+
+    case ERR_CANNOT_FIND_SYMBOL: {
+      swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
+               L"\33[31m[ERR]找不到符号(%ls)！\33[0m\n",
+               errCode ? errCode : L"(null)");
+      break;
+    }
+
+    case ERR_EXP: {
+      swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
+               L"\33[31m[ERR]表达式错误(%ls)！\33[0m\n",
+               errCode ? errCode : L"(null)");
+      break;
+    }
+
+    case ERR_OUT_OF_VALUE: {
+      swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
+               L"\33[31m[ERR]数值溢出(%ls)！\33[0m\n",
+               errCode ? errCode : L"？？？？");
       break;
     }
   }
