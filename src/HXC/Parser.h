@@ -1,15 +1,16 @@
 #ifndef HXLANG_PARSER_H
 #define HXLANG_PARSER_H
+#include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <wchar.h>
-#include <errno.h>
 #include <string.h>
+#include <wchar.h>
 
 #include "Lexer.h"
-struct Exp;
+// 结构体定义 (与你原文件一致)
+struct ASTNode;
 typedef enum Type {
     TYPE_INT = 1,
     TYPE_FLOAT,
@@ -69,13 +70,41 @@ typedef struct ASTNode {
     } value;
 } ASTNode;
 
-static int _hxl_create_primary_exp(Token* token, Symbol* table, int tableSize, ASTNode* node);
 extern int parseExp(Tokens* src, int index, int end_index, Symbol* table,
                     int tableSize, ASTNode* result);
 extern int genByAST(ASTNode* ast, Command** cmd, int* size, int* index);
 Type getLiteralTypeByString(Token* token);  // 通过字面量获取其类型
-//辅助函数：将单个 Token (ID 或 VAL) 转换为 ASTNode (VARIABLE 或 LITERAL)
-static int _hxl_create_primary_exp(Token* token, Symbol* table, int tableSize, ASTNode* node) {
+// 辅助函数：释放AST
+void freeAST(ASTNode* node) {
+    if (!node) return;
+    switch (node->type) {
+    case LITERAL:
+        if (node->value.literal.type == TYPE_STR &&
+                node->value.literal.value.string_value) {
+            free(node->value.literal.value.string_value);
+        }
+        break;
+    case BIN_EXP:
+        freeAST(node->value.binExp.left);
+        freeAST(node->value.binExp.right);
+        break;
+    case UNARY_EXP:
+        freeAST(node->value.unaryExp.value);
+        break;
+    case VARIABLE:
+        if (node->value.id.name) {
+            free(node->value.id.name);
+        }
+        break;
+    case FUN_CALL:
+        // (暂未实现)
+        break;
+    }
+    free(node);
+}
+// 辅助函数：创建基本表达式
+static int _hxl_create_primary_exp(Token* token, Symbol* table, int tableSize,
+                                   ASTNode* node) {
     if (!token || !node) return -1;
 
     if (token->type == TOK_ID) {
@@ -87,8 +116,8 @@ static int _hxl_create_primary_exp(Token* token, Symbol* table, int tableSize, A
             setError(ERR_CANNOT_FIND_SYMBOL, token->line, token->value);
             return 255;
         }
-        node->value.id.name = (wchar_t*)calloc(
-                                  wcslen(token->value) + 1, sizeof(wchar_t));
+        node->value.id.name =
+            (wchar_t*)calloc(wcslen(token->value) + 1, sizeof(wchar_t));
         if (!(node->value.id.name)) return -1;
         wcscpy(node->value.id.name, token->value);
         return 0;
@@ -101,19 +130,17 @@ static int _hxl_create_primary_exp(Token* token, Symbol* table, int tableSize, A
             return 255;
         }
 
-        errno = 0; // 重置 errno 以检查转换错误
+        errno = 0;  // 重置 errno 以检查转换错误
         switch (node->value.literal.type) {
         case TYPE_INT: {
             wchar_t* p = NULL;
             node->value.literal.value.int_value =
                 (int32_t)wcstol(token->value, &p, 0);
-            // wprintf(L"%d\n", (int)(node->value.literal.value.int_value)); // 调试语句，不应保留在生产代码中
             break;
         }
         case TYPE_FLOAT: {
             wchar_t* p = NULL;
-            node->value.literal.value.float_value =
-                (float)wcstof(token->value, &p);
+            node->value.literal.value.float_value = (float)wcstof(token->value, &p);
             break;
         }
         case TYPE_DOUBLE: {
@@ -127,7 +154,6 @@ static int _hxl_create_primary_exp(Token* token, Symbol* table, int tableSize, A
             break;
         }
         case TYPE_STR: {
-            // 对于字符串字面量，需要拷贝字符串的值
             node->value.literal.value.string_value =
                 (wchar_t*)calloc(wcslen(token->value) + 1, sizeof(wchar_t));
             if (!(node->value.literal.value.string_value)) return -1;
@@ -145,155 +171,197 @@ static int _hxl_create_primary_exp(Token* token, Symbol* table, int tableSize, A
     // 如果 token 既不是 ID 也不是 VAL，则表示内部逻辑错误
     return 255;
 }
-
-
-int parseExp(Tokens* src, int index, int end_index, Symbol* table,
-             int tableSize, ASTNode* result) {
-    if (src == NULL || !result) return -1;
-    if (index >= end_index) return 255; // 索引越界或空表达式
-
-    Token* current_token = &(src->tokens[index]);
-
-    if (current_token->type == TOK_ID || current_token->type == TOK_VAL) {
-        if (index + 1 == end_index) {
-            // ----------------------------------------------------
-            // 情况 1: 单个标识符或字面量表达式 (a 或 123)
-            // ----------------------------------------------------
-            int err = _hxl_create_primary_exp(current_token, table, tableSize, result);
-            // 原始代码返回 0 成功，255 错误，-1 内存错误。保持不变。
-            return err;
-        } else {
-            // ----------------------------------------------------
-            // 情况 2: 偷看下一个 token，处理二元运算的开始
-            // ----------------------------------------------------
-            int lookahead_index = index + 1;
-            Token* lookahead_token = &(src->tokens[lookahead_index]);
-
-            // 检查是否是 + / - 运算符 (加法和减法优先级)
-            if (wcscmp(lookahead_token->value, L"+") == 0 ||
-                    wcscmp(lookahead_token->value, L"-") == 0) {
-
-                if (lookahead_index + 1 > end_index) {
-                    setError(ERR_EXP, lookahead_token->line, lookahead_token->value);
-                    return 255;
-                }
-
-                result->type = BIN_EXP;
-                result->value.binExp.op = (wcscmp(lookahead_token->value, L"+") == 0) ? OP_ADD : OP_SUB;
-                result->value.binExp.tokenIndex = lookahead_token->line;
-
-                ASTNode* left = (ASTNode*)calloc(1, sizeof(ASTNode));
-                if (!left) return -1;
-
-                int err_left = _hxl_create_primary_exp(current_token, table, tableSize, left);
-                if (err_left) {
-                    free(left); // 发生错误，必须释放已分配的内存
-                    return err_left;
-                }
-                result->value.binExp.left = left;
-
-                int right_start_index = lookahead_index + 1;
-                ASTNode* right = (ASTNode*)calloc(1, sizeof(ASTNode));
-                if (!right) {
-                    // right 分配失败，必须释放 left
-                    // 注意：如果 left 是字面量，其内部的字符串可能也需要释放 (未在此处处理，但建议在完整的释放函数中处理)
-                    free(left);
-                    return -1;
-                }
-
-                int err_right = parseExp(src, right_start_index, end_index, table, tableSize, right);
-                if (err_right) {
-                    // 右侧解析失败，必须释放 left 和 right
-                    // 注意：如果 left/right 内部有动态内存 (如ID的name, STR字面量)，也需要在此处释放
-                    free(left);
-                    free(right);
-                    return err_right;
-                }
-                result->value.binExp.right = right;
-
-                // **重要提示:** // 原始代码成功解析右侧后，直接返回了右侧的错误码 (0),
-                // 这意味着调用者不知道表达式占用了多少个 tokens。
-                // 保持原始行为：返回右侧递归调用的错误码。
-                return err_right;
-
-                // 检查是否是 * / / 运算符 (乘法和除法优先级)
-            } else if (wcscmp(lookahead_token->value, L"*") == 0 || wcscmp(lookahead_token->value, L"/") == 0 ||
-                       wcscmp(lookahead_token->value, L"×") == 0 || wcscmp(lookahead_token->value, L"÷") == 0) {
-
-                // 乘除法的解析逻辑与加减法类似，但涉及到优先级，原始逻辑是有问题的。
-                // 此处基于您原始的代码逻辑进行重构以消除代码重复和内存泄漏。
-
-                if (lookahead_index + 1 > end_index) {
-                    setError(ERR_EXP, lookahead_token->line, lookahead_token->value);
-                    return 255;
-                }
-
-                result->type = BIN_EXP;
-                if (wcscmp(lookahead_token->value, L"*") == 0 || wcscmp(lookahead_token->value, L"×") == 0) {
-                    result->value.binExp.op = OP_MUL;
-                } else {
-                    result->value.binExp.op = OP_DIV;
-                }
-                result->value.binExp.tokenIndex = lookahead_token->line;
-
-
-                ASTNode* left = (ASTNode*)calloc(1, sizeof(ASTNode));
-                if (!left) return -1;
-
-                int err_left = _hxl_create_primary_exp(current_token, table, tableSize, left);
-                if (err_left) {
-                    free(left);
-                    return err_left;
-                }
-                result->value.binExp.left = left;
-
-                int right_start_index = lookahead_index + 1;
-                ASTNode* right = (ASTNode*)calloc(1, sizeof(ASTNode));
-                if (!right) {
-                    free(left);
-                    return -1;
-                }
-
-                // **注意:** 原始代码在处理乘除法时有一个额外的“偷看”逻辑
-                // 该逻辑是为了处理乘除法比加减法优先级高的问题，但实现方式不规范，
-                // 并且在递归调用时使用了 lookahead_index - 1 作为起始索引。
-                // 为了保持您原有的意图（尽管有缺陷），我保留了原有的递归调用方式，
-                // 但清理了内存管理和代码重复。
-
-                // 原始逻辑：此时指向+或-号右侧,继续偷看 (这里应该是下一个token的右侧)
-                // if(index+1 <= end_index) { index++; ... }
-                // 实际索引是 right_start_index。
-
-                int err_right = parseExp(src, right_start_index, end_index, table, tableSize, right);
-
-                if (err_right) {
-                    free(left);
-                    free(right);
-                    return err_right;
-                }
-                result->value.binExp.right = right;
-
-                // 保持原始行为：返回右侧递归调用的错误码
-                return err_right;
-            }
-        }
+// 表达式解析器
+// 需要前向声明，因为 parse_primary 会调用 parse_additive (用于括号)
+static int parse_additive(Tokens* src, int* index, int end_index, Symbol* table,
+                          int tableSize, ASTNode** result_node);
+// 解析一个 "基本" 表达式 (字面量, 变量, 或括号)
+static int parse_primary(Tokens* src, int* index, int end_index, Symbol* table,
+                         int tableSize, ASTNode** result_node) {
+    if (*index >= end_index) {
+        setError(ERR_EXP, (end_index > 0 ? src->tokens[end_index - 1].line : 0),
+                 L"预期应有表达式");
+        return 255;
     }
-    // 如果没有匹配的表达式模式，则返回错误
-    // 注意：您原始代码中，对于不匹配的 TOKEN_ID/VAL 后的 token，没有明确的返回路径
-    // 如果 token 既不是 ID 也不是 VAL，此处将返回 255
-    setError(ERR_EXP, current_token->line, current_token->value);
+    Token* token = &(src->tokens[*index]);
+    // 1. 处理括号 ( ... )
+    if (wcscmp(token->value, L"(") == 0) {
+        (*index)++;  // 消耗 '('
+        int err =
+            parse_additive(src, index, end_index, table, tableSize, result_node);
+        if (err) return err;  // 递归解析括号内的表达式
+
+        if (*index >= end_index || (wcscmp(src->tokens[*index].value, L")") != 0)) {
+            setError(ERR_EXP, token->line, L"括号不匹配，缺少 ')'");
+            freeAST(*result_node);  // 释放已解析的子树
+            *result_node = NULL;
+            return 255;
+        }
+        (*index)++;  // 消耗 ')'
+        return 0;
+    }
+    // 2. 处理字面量或变量
+    if (token->type == TOK_ID || token->type == TOK_VAL) {
+        *result_node = (ASTNode*)calloc(1, sizeof(ASTNode));
+        if (!*result_node) return -1;  // 内存错误
+
+        int err = _hxl_create_primary_exp(token, table, tableSize, *result_node);
+        if (err) {
+            free(*result_node);  // 注意：这里只 free 节点本身，因为
+            // _hxl_create_primary_exp 失败时不会分配内部数据
+            *result_node = NULL;
+            return err;
+        }
+        (*index)++;  // 消耗 token
+        return 0;    // 成功
+    }
+    // 3. 错误
+    setError(ERR_EXP, token->line, token->value);
     return 255;
 }
 
-// (其余函数保持不变)
+/**
+ *解析乘法/除法 (高优先级)
+ * multiplicative ::= primary ( ( '*' | '/' ) primary )*
+ */
+static int parse_multiplicative(Tokens* src, int* index, int end_index,
+                                Symbol* table, int tableSize,
+                                ASTNode** result_node) {
+    int err = parse_primary(src, index, end_index, table, tableSize, result_node);
+    if (err) return err;
 
+    while (*index < end_index) {
+        Token* op_token = &(src->tokens[*index]);
+        Operator op;
+
+        if (wcscmp(op_token->value, L"*") == 0 ||
+                wcscmp(op_token->value, L"×") == 0) {
+            op = OP_MUL;
+        } else if (wcscmp(op_token->value, L"/") == 0 ||
+                   wcscmp(op_token->value, L"÷") == 0) {
+            op = OP_DIV;
+        } else {
+            break;  // 不是乘除法运算符，退出循环
+        }
+        (*index)++;  // 消耗 '*, /'
+
+        ASTNode* right_node = NULL;
+        err = parse_primary(src, index, end_index, table, tableSize, &right_node);
+        if (err) {
+            freeAST(*result_node);  // 释放左侧子树
+            return err;
+        }
+
+        // 创建新的二元表达式节点
+        ASTNode* new_left_node = (ASTNode*)calloc(1, sizeof(ASTNode));
+        if (!new_left_node) {
+            freeAST(*result_node);
+            freeAST(right_node);
+            return -1;
+        }
+
+        new_left_node->type = BIN_EXP;
+        new_left_node->value.binExp.op = op;
+        new_left_node->value.binExp.tokenIndex = op_token->line;
+        new_left_node->value.binExp.left =
+            *result_node;  // 旧的左侧节点成为新节点的左子节点
+        new_left_node->value.binExp.right = right_node;
+
+        *result_node = new_left_node;  // 新节点成为新的 "左侧"
+    }
+    return 0;  // 成功
+}
+
+/**
+ *   解析加法/减法 (低优先级)
+ * additive ::= multiplicative ( ( '+' | '-' ) multiplicative )*
+ */
+static int parse_additive(Tokens* src, int* index, int end_index, Symbol* table,
+                          int tableSize, ASTNode** result_node) {
+    // 1. 首先解析一个高优先级的 "乘法表达式"
+    int err = parse_multiplicative(src, index, end_index, table, tableSize,
+                                   result_node);
+    if (err) return err;
+    // 2. 循环查找 '+' 或 '-'
+    while (*index < end_index) {
+        Token* op_token = &(src->tokens[*index]);
+        Operator op;
+
+        if (wcscmp(op_token->value, L"+") == 0) {
+            op = OP_ADD;
+        } else if (wcscmp(op_token->value, L"-") == 0) {
+            op = OP_SUB;
+        } else {
+            break;  // 不是加减法运算符，退出循环
+        }
+        (*index)++;  // 消耗 '+, -'
+
+        ASTNode* right_node = NULL;
+        // 关键：右侧操作数必须是 "乘法表达式" 级别，以保证优先级
+        err = parse_multiplicative(src, index, end_index, table, tableSize,
+                                   &right_node);
+        if (err) {
+            freeAST(*result_node);  // 释放左侧子树
+            return err;
+        }
+
+        // 创建新的二元表达式节点
+        ASTNode* new_left_node = (ASTNode*)calloc(1, sizeof(ASTNode));
+        if (!new_left_node) {
+            freeAST(*result_node);
+            freeAST(right_node);
+            return -1;
+        }
+
+        new_left_node->type = BIN_EXP;
+        new_left_node->value.binExp.op = op;
+        new_left_node->value.binExp.tokenIndex = op_token->line;
+        new_left_node->value.binExp.left = *result_node;
+        new_left_node->value.binExp.right = right_node;
+
+        *result_node = new_left_node;
+    }
+    return 0;  // 成功
+}
+/*-----表达式解析的入口函数----*/
+int parseExp(Tokens* src, int index, int end_index, Symbol* table,
+             int tableSize, ASTNode* result) {
+    if (!src || !result) return -1;
+    if (index >= end_index) {
+        setError(ERR_EXP, (index > 0 ? src->tokens[index - 1].line : 0),
+                 L"空表达式");
+        return 255;
+    }
+    int current_index = index;
+    ASTNode* temp_result = NULL;
+    // 1. 调用解析器
+    int err = parse_additive(src, &current_index, end_index, table, tableSize,
+                             &temp_result);
+    if (err) {
+        // freeAST(temp_result); // parse_additive 失败时会自行清理
+        return err;
+    }
+    // 2. 检查是否解析了所有 tokens
+    if (current_index != end_index) {
+        // 表达式解析提前结束，说明有语法错误 (例如 "a b" 或 "a + * b")
+        setError(ERR_EXP, src->tokens[current_index].line,
+                 src->tokens[current_index].value);
+        freeAST(temp_result);
+        return 255;
+    }
+    // 3. 成功 - 将结果复制到 'result' 指针中
+    memcpy(result, temp_result, sizeof(ASTNode));
+    free(temp_result);  // 释放临时包装节点 (内部指针已被复制)
+    return 0;           // 成功
+}
 Type getLiteralTypeByString(Token* token) {  // 通过字面量获取其类型
     Type type = 0;
     if (!token) return type;
     if (!(token->value)) return type;
     if (wcschr(token->value, L'.') != NULL) {
         // 11.4f     ,   浮点型
-        if (wcslen(token->value) > 0 && token->value[wcslen(token->value) - 1] == L'f') {
+        if (wcslen(token->value) > 0 &&
+                token->value[wcslen(token->value) - 1] == L'f') {
             type = TYPE_FLOAT;
             return type;
         } else {
@@ -313,35 +381,134 @@ Type getLiteralTypeByString(Token* token) {  // 通过字面量获取其类型
         return type;
     }
 }
-
 int genByAST(ASTNode* ast, Command** cmd, int* size, int* index) {
-    if(!ast || !cmd || !size || !index) return -1;
-    if(*index >= *size) {
-        Command* temp = (Command*)realloc(*cmd, ((*index)+1)*sizeof(Command));
-        if(!temp) return -1;
-        *cmd = temp;
-        memset(&((*cmd)[*index]), 0, sizeof(Command));
-        *size = *index+1;
-    }
-    if(ast->type==BIN_EXP) {
-        switch(ast->value.binExp.op) {
+    if (!ast || !cmd || !size || !index) return -1;
+    if(!(*cmd)) return -1;
+    // (处理当前节点)
+    if (ast->type == BIN_EXP) {
+        // 细节：右
+        int err = genByAST(ast->value.binExp.left, cmd, size, index);
+        if (err) return err;
+        int rightErr = genByAST(ast->value.binExp.right, cmd, size, index);
+        if (rightErr) return rightErr;
+
+        if (*index >= *size) {
+            Command* temp = (Command*)realloc(*cmd, ((*index) + 1) * sizeof(Command));
+            if (!temp) return -1;
+            *cmd = temp;
+            memset(&((*cmd)[*index]), 0, sizeof(Command));
+            *size = *index + 1;
+        }
+
+        switch (ast->value.binExp.op) {
         case OP_ADD: {
-            (*cmd)[*index].op = PUSH;
-            (*index)++;
-            if(*index >= *size) {
-                Command* temp = (Command*)realloc(*cmd, ((*index)+1)*sizeof(Command));
-                if(!temp) return -1;
-                *cmd = temp;
-                memset(&((*cmd)[*index]), 0, sizeof(Command));
-                *size = *index+1;
-            }
 #ifdef HX_DEBUG
             log(L"生成ADD");
 #endif
             (*cmd)[*index].op = ADD;
             break;
         }
+        case OP_SUB: {
+#ifdef HX_DEBUG
+            log(L"生成SUB");
+#endif
+            (*cmd)[*index].op = SUB;
+            break;
         }
+        case OP_MUL: {
+#ifdef HX_DEBUG
+            log(L"生成MUL");
+#endif
+            (*cmd)[*index].op = MUL;
+            break;
+        }
+        case OP_DIV: {
+#ifdef HX_DEBUG
+            log(L"生成DIV");
+#endif
+            (*cmd)[*index].op = DIV;
+            break;
+        }
+        default:
+            break;
+        }
+        (*index)++;
+    } else if (ast->type == LITERAL) {
+        if (*index >= *size) {
+            Command* temp = (Command*)realloc(*cmd, ((*index) + 1) * sizeof(Command));
+            if (!temp) return -1;
+            *cmd = temp;
+            memset(&((*cmd)[*index]), 0, sizeof(Command));
+            *size = *index + 1;
+        }
+
+        (*cmd)[*index].op = PUSH;
+        (*cmd)[*index].args[0].type = DATA;
+        switch (ast->value.literal.type) {
+        case TYPE_INT: {
+            (*cmd)[*index].args[0].size = sizeof(int32_t);
+            (*cmd)[*index].args[0].value.data = calloc(1, sizeof(int32_t));
+            if (!((*cmd)[*index].args[0].value.data)) return -1;
+            *((int32_t*)((*cmd)[*index].args[0].value.data)) =
+                (int32_t)(ast->value.literal.value.int_value);
+#ifdef HX_DEBUG
+            fwprintf(logStream, L"\33[33m[DEB]\33[0m生成PUSH %d(size:%d)\n",
+                     *((int32_t*)((*cmd)[*index].args[0].value.data)),
+                     (int)(*cmd)[*index].args[0].size);
+#endif
+            break;
+        }
+        case TYPE_FLOAT: {
+            (*cmd)[*index].args[0].size = sizeof(float);
+            (*cmd)[*index].args[0].value.data = calloc(1, sizeof(float));
+            if (!((*cmd)[*index].args[0].value.data)) return -1;
+            *((float*)((*cmd)[*index].args[0].value.data)) =
+                (float)(ast->value.literal.value.float_value);
+#ifdef HX_DEBUG
+            fwprintf(logStream, L"\33[33m[DEB]\33[0m生成PUSH %f(size:%d)\n",
+                     *((float*)((*cmd)[*index].args[0].value.data)),
+                     (int)(*cmd)[*index].args[0].size);
+#endif
+            break;
+        }
+        case TYPE_DOUBLE: {
+            (*cmd)[*index].args[0].size = sizeof(double);
+            (*cmd)[*index].args[0].value.data = calloc(1, sizeof(double));
+            if (!((*cmd)[*index].args[0].value.data)) return -1;
+            *((double*)((*cmd)[*index].args[0].value.data)) =
+                (double)(ast->value.literal.value.double_value);
+#ifdef HX_DEBUG
+            fwprintf(logStream, L"\33[33m[DEB]\33[0m生成PUSH %lf(size:%d)\n",
+                     *((double*)((*cmd)[*index].args[0].value.data)),
+                     (int)(*cmd)[*index].args[0].size);
+#endif
+            break;
+        }
+        case TYPE_CHAR: {
+            (*cmd)[*index].args[0].size = sizeof(uint16_t);
+            (*cmd)[*index].args[0].value.data = calloc(1, sizeof(uint16_t));
+            if (!((*cmd)[*index].args[0].value.data)) return -1;
+            *((uint16_t*)((*cmd)[*index].args[0].value.data)) =
+                (uint16_t)(ast->value.literal.value.char_value);
+#ifdef HX_DEBUG
+            fwprintf(logStream, L"\33[33m[DEB]\33[0m生成PUSH %lc(size:%d)\n",
+                     (wchar_t) * ((uint16_t*)((*cmd)[*index].args[0].value.data)),
+                     (int)(*cmd)[*index].args[0].size);
+#endif
+            break;
+        }
+        }
+        (*index)++;
+    } else if (ast->type == VARIABLE) {
+        if (*index >= *size) {
+            Command* temp = (Command*)realloc(*cmd, ((*index) + 1) * sizeof(Command));
+            if (!temp) return -1;
+            *cmd = temp;
+            memset(&((*cmd)[*index]), 0, sizeof(Command));
+            *size = *index + 1;
+        }
+        // ... (待实现：生成 PUSH <variable_address> 或 LOAD 指令)
+        (*index)++;
     }
     return 0;
 }

@@ -3,13 +3,13 @@
 #include <stdio.h>
 #include <time.h>
 #include <wchar.h>
-#define log(msg) fwprintf(logStream, L"\33[33m[DEB]%ls\33[0m\n", msg);
+#define log(msg, ...) fwprintf(logStream, L"\33[33m[DEB]\33[0m"\
+									 msg\
+                                     L"\n", ##__VA_ARGS__)
 FILE* outputStream = NULL;
 FILE* logStream = NULL;
 FILE* errorStream = NULL;
-#include "Generator.h"
 #include "Lexer.h"
-#include "Pass.h"
 #include "Scanner.h"
 
 int main(int argc, char* argv[]) {
@@ -27,6 +27,9 @@ int main(int argc, char* argv[]) {
         fwprintf(outputStream, L"\33[31m[ERR]\33[0m编译失败。\n");
         return -1;
     }
+#ifdef HX_DEBUG
+    fwprintf(outputStream, L"源文件：\n%ls\n", src);
+#endif
     if (wcslen(src) == 0) {
         fwprintf(outputStream, L"\33[31m[ERR]\33[0m你的源文件里空空如也！\n");
         fwprintf(outputStream, L"\33[31m[ERR]\33[0m编译失败。\n");
@@ -53,52 +56,7 @@ int main(int argc, char* argv[]) {
     free(src);
     src = NULL;
     // 词法分析结束
-    IR_1* ir_1 = NULL;
-    ir_1 = (IR_1*)calloc(1, sizeof(IR_1));
-    if (!ir_1) {
-        fwprintf(errorStream, L"\33[31m[ERR]\33[0m内存分配失败！\n");
-        freeTokens(&tokens);
-        return -1;
-    }
-    int passError = 0;
-    fwprintf(outputStream, L"\33[34m[INFO]\33[0m正在进行第一次遍历\n");
-    passError = pass(tokens, ir_1);
-    if (passError == -1) {
-        fwprintf(errorStream, L"\33[31m[ERR]\33[0m内存分配失败！\n");
-        freeTokens(&tokens);
-        freeIR_1(&ir_1);
-        return -1;
-    }
-    if (passError == 255) {
-        fwprintf(errorStream, L"%ls\n", errorMessageBuffer);
-        fwprintf(outputStream, L"\33[31m[ERR]\33[0m编译失败。\n");
-        freeTokens(&tokens);
-        freeIR_1(&ir_1);
-        return 255;
-    }
-    fwprintf(outputStream, L"\33[34m[INFO]\33[0m第一次遍历完成\n");
-    freeTokens(&tokens);
-    // 生成目标代码
-    HxCode* object = (HxCode*)calloc(1, sizeof(HxCode));
-    if (!object) {
-        freeIR_1(&ir_1);
-        return -1;
-    }
-    int genErr = gen(ir_1, object);
-    if (genErr == -1) {
-        fwprintf(errorStream, L"\33[31m[ERR]\33[0m内存分配失败！\n");
-        freeIR_1(&ir_1);
-        return -1;
-    }
-    if (genErr == 255) {
-        fwprintf(errorStream, L"%ls\n", errorMessageBuffer);
-        fwprintf(outputStream, L"\33[31m[ERR]\33[0m编译失败。\n");
-        freeIR_1(&ir_1);
-        return 255;
-    }
-    freeObject(&object);
-    freeIR_1(&ir_1);
-    end = clock();
+
     fwprintf(outputStream, L"\33[34m[INFO]\33[0m编译完成。共耗时%lfs\n",
              (double)(end - start) / CLOCKS_PER_SEC);
     return 0;
