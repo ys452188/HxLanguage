@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <time.h>
 #include <wchar.h>
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
 #define log(msg, ...) fwprintf(logStream, L"\33[33m[DEB]\33[0m"\
 									 msg\
                                      L"\n", ##__VA_ARGS__)
@@ -11,6 +15,8 @@ FILE* logStream = NULL;
 FILE* errorStream = NULL;
 #include "Lexer.h"
 #include "Scanner.h"
+#include "Error.h"
+#include "IR.h"
 
 int main(int argc, char* argv[]) {
     clock_t start, end;
@@ -18,10 +24,17 @@ int main(int argc, char* argv[]) {
     outputStream = stdout;
     logStream = stdout;
     errorStream = stderr;
+    // On Windows, enable UTF-16 mode for wide-character console output
+#ifdef _WIN32
+    _setmode(_fileno(stdout), _O_U16TEXT);
+    _setmode(_fileno(stderr), _O_U16TEXT);
+#endif
     // 读取源文件
+    initLocale();
+    fwprintf(outputStream, L"开始\n");
+    fflush(outputStream);
     wchar_t* src = NULL;
     int scannerError = readSourceFile("test.hxl", &src);
-    initLocale();
     if (scannerError) {
         fwprintf(outputStream, L"\33[31m[ERR]\33[0m在读取源文件时出错了！\n");
         fwprintf(outputStream, L"\33[31m[ERR]\33[0m编译失败。\n");
@@ -53,10 +66,24 @@ int main(int argc, char* argv[]) {
 #ifdef HX_DEBUG
     showTokens(tokens);
 #endif
+    // 中间表示生成
+    IR_Program* program = NULL;
+    int irError = 0;
+    program = generateIR(tokens, &irError);
+    freeTokens(&tokens);
+    if(irError == 255) {
+        fwprintf(errorStream, L"%ls\n", errorMessageBuffer);
+        fwprintf(outputStream, L"\33[31m[ERR]\33[0m编译失败。\n");
+        return 255;
+    } else if(irError == -1) {
+        fwprintf(errorStream, L"\33[31m[ERR]\33[0m内存分配失败！\n");
+        return -1;
+    }
+    
     free(src);
     src = NULL;
-    // 词法分析结束
 
+    end = clock();
     fwprintf(outputStream, L"\33[34m[INFO]\33[0m编译完成。共耗时%lfs\n",
              (double)(end - start) / CLOCKS_PER_SEC);
     return 0;
