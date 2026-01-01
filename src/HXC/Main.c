@@ -19,22 +19,23 @@ FILE* errorStream = NULL;
 #include "IR.h"
 
 int main(int argc, char* argv[]) {
+    initLocale();
+    if(argc < 2) {
+        fwprintf(stderr, L"\33[31m[ERR]\33[0m请提供源文件路径！\n");
+        return -1;
+    }
     clock_t start, end;
     start = clock();
     outputStream = stdout;
     logStream = stdout;
     errorStream = stderr;
-    // On Windows, enable UTF-16 mode for wide-character console output
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_U16TEXT);
     _setmode(_fileno(stderr), _O_U16TEXT);
 #endif
     // 读取源文件
-    initLocale();
-    fwprintf(outputStream, L"开始\n");
-    fflush(outputStream);
     wchar_t* src = NULL;
-    int scannerError = readSourceFile("test.hxl", &src);
+    int scannerError = readSourceFile(argv[1], &src);
     if (scannerError) {
         fwprintf(outputStream, L"\33[31m[ERR]\33[0m在读取源文件时出错了！\n");
         fwprintf(outputStream, L"\33[31m[ERR]\33[0m编译失败。\n");
