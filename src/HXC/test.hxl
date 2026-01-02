@@ -1,18 +1,22 @@
 定义函数：主函数(无参数),它的返回类型是：整型 {
 	定义变量：新变量,它的类型是：整型,初始化：114;
+	newVar=114514;
 	返回->0;
 }
-fun:func1(void) {
+var: newVar;
+fun: func1(void) {
 	log("Hello");
 }
-class:Test {
+class: Test {
+	protected:
 	fun:foo()->void {
 		log("This is a Test.");
 	}
 }
-class:Child,parent:Test {
+class: Child,parent:Test {
+	public:
 	fun:boo()->void {
 		log("call foo.");
-		foo;
+		parent.foo();
 	}
 }

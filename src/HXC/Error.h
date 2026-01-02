@@ -96,8 +96,8 @@ void setError(ErrorType e, int errorLine, wchar_t* errCode) {
       swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
                L"\33[31m[ERR]定义类时访问权限修饰符使用错误！\33[0m(位于第%d行)"
                L"\n\33[36m[NOTE]\33[0m 声明类成员::= "
-               L"\"public\"|\"private\"|\"protected\"|\"公有成员\"|"
-               L"\"私有成员\"|\"受保护成员\" <\"{\"> ... <\"}\">\n",
+               L"\"[public\"|\"private\"|\"protected\"|\"公有成员\"|"
+               L"\"私有成员\"|\"受保护成员\" <\":\"> ] 定义函数|声明变量\n",
                errorLine);
       break;
     }
