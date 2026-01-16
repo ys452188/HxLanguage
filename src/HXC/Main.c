@@ -8,18 +8,17 @@
 #include <io.h>
 
 #endif
-#define log(msg, ...)                                                          \
+#define log(msg, ...) \
   fwprintf(logStream, L"\33[33m[DEB]\33[0m" msg L"\n", ##__VA_ARGS__)
-FILE *outputStream = NULL;
-FILE *logStream = NULL;
-FILE *errorStream = NULL;
+FILE* outputStream = NULL;
+FILE* logStream = NULL;
+FILE* errorStream = NULL;
 #include "Error.h"
 #include "IR.h"
 #include "Lexer.h"
 #include "Scanner.h"
 
-
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   initLocale();
   if (argc < 2) {
     fwprintf(stderr, L"\33[31m[ERR]\33[0m请提供源文件路径！\n");
@@ -35,7 +34,7 @@ int main(int argc, char *argv[]) {
   _setmode(_fileno(stderr), _O_U16TEXT);
 #endif
   // 读取源文件
-  wchar_t *src = NULL;
+  wchar_t* src = NULL;
   int scannerError = readSourceFile(argv[1], &src);
   if (scannerError) {
     fwprintf(outputStream, L"\33[31m[ERR]\33[0m在读取源文件时出错了！\n");
@@ -53,7 +52,7 @@ int main(int argc, char *argv[]) {
   // 词法分析
   int lexerError = 0;
   fwprintf(outputStream, L"\33[34m[INFO]\33[0m正在进行词法分析\n");
-  Tokens *tokens = lex(src, &lexerError);
+  Tokens* tokens = lex(src, &lexerError);
   if (lexerError == 255) {
     fwprintf(errorStream, L"%ls\n", errorMessageBuffer);
     freeTokens(&tokens);
@@ -71,7 +70,7 @@ int main(int argc, char *argv[]) {
   showTokens(tokens);
 #endif
   // 中间表示生成
-  IR_Program *program = NULL;
+  IR_Program* program = NULL;
   int irError = 0;
   program = generateIR(tokens, &irError);
   freeTokens(&tokens);

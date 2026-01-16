@@ -6,13 +6,13 @@
 #define ERROR_BUF_SIZE 1024
 wchar_t errorMessageBuffer[ERROR_BUF_SIZE];  // 错误信息缓冲区
 typedef enum ErrorType {
-  ERR_GLOBAL_UNKOWN,                      // 未知的全局定义
-  ERR_NO_END,                                 // 语句没结尾
-  ERR_CH_NO_END,                              // 字符没结尾
-  ERR_STR_NO_END,                             // 字符串没结尾
-  ERR_VAL,                                    // 字面量写错了
-  ERR_HUAKUOHAO_NOT_CLOSE,                    // 花括号末正确闭合
-  ERR_DEF_VAR,                                // 定义变量语法错误
+  ERR_GLOBAL_UNKOWN,        // 未知的全局定义
+  ERR_NO_END,               // 语句没结尾
+  ERR_CH_NO_END,            // 字符没结尾
+  ERR_STR_NO_END,           // 字符串没结尾
+  ERR_VAL,                  // 字面量写错了
+  ERR_HUAKUOHAO_NOT_CLOSE,  // 花括号末正确闭合
+  ERR_DEF_VAR,              // 定义变量语法错误
   ERR_DEF_CLASS,
   ERR_DEF_CLASS_ACCESS,              // 定义类时访问权限修饰符使用错误
   ERR_DEF_CLASS_DOUBLE_DEFINED_SYM,  // 定义类时重复声明符号
@@ -121,15 +121,17 @@ void setError(ErrorType e, int errorLine, wchar_t* errCode) {
     }
 
     case ERR_FUN: {
-      swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
-               L"\33[31m[ERR]定义函数的语法错误！\33[0m(位于第%d行)\n\33[36m["
-               L"NOTE]\33[0m DefineFunction::= "
-               L"<\"fun\"><\":\"><id><\"(\"><args><\")\">[<\"->\"><id|kw>]<\"{\">."
-               L"..<\"}\">\n定义函数::= "
-               L"<\"定义函数\"><\"：\"><标识符><\"(\"><参数><\")\">[<\",\"><"
-               L"\"它的返回值是\"><\"：\"><数据类型>]|[<\",\"><\"它没有返回类型\">]<\"{\">...<\"}\">"
-               L"\n\33[36m[NOTE]\33[0m函数体内不可定义函数！\n",
-               errorLine);
+      swprintf(
+          errorMessageBuffer, ERROR_BUF_SIZE,
+          L"\33[31m[ERR]定义函数的语法错误！\33[0m(位于第%d行)\n\33[36m["
+          L"NOTE]\33[0m DefineFunction::= "
+          L"<\"fun\"><\":\"><id><\"(\"><args><\")\">[<\"->\"><id|kw>]<\"{\">."
+          L"..<\"}\">\n定义函数::= "
+          L"<\"定义函数\"><\"：\"><标识符><\"(\"><参数><\")\">[<\",\"><"
+          L"\"它的返回值是\"><\"：\"><数据类型>]|[<\",\"><\"它没有返回类型\">]<"
+          L"\"{\">...<\"}\">"
+          L"\n\33[36m[NOTE]\33[0m函数体内不可定义函数！\n",
+          errorLine);
       break;
     }
 
@@ -204,8 +206,7 @@ void setError(ErrorType e, int errorLine, wchar_t* errCode) {
 
     case ERR_GLOBAL_UNKOWN: {
       swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
-               L"\33[31m[ERR]未知的全局定义！\33[0m(位于第%d行)\n",
-               errorLine);
+               L"\33[31m[ERR]未知的全局定义！\33[0m(位于第%d行)\n", errorLine);
       break;
     }
   }

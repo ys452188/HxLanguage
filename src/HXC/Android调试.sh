@@ -1,8 +1,8 @@
 # Google风格格式化
-clang-format -style=Google -i Main.c Lexer.h Parser.h Pass.h Error.h Generator.h Scanner.h
+clang-format -style=Google -i Main.c Lexer.h IR.h Error.h Generator.h Scanner.h ObjectCode.h Checker.h
 clang -g -fno-omit-frame-pointer -fsanitize=address Main.c
 cp -r a.out ~/
 rm a.out
 cd ~/
 chmod +x a.out
-./a.out
+./a.out /storage/emulated/0/test.hxl
