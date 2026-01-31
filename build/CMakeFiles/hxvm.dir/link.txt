@@ -1,0 +1,3 @@
+D:\CMake\bin\cmake.exe -E rm -f CMakeFiles\hxvm.dir/objects.a
+D:\msys64\mingw64\bin\ar.exe qc CMakeFiles\hxvm.dir/objects.a @CMakeFiles\hxvm.dir\objects1.rsp
+D:\msys64\mingw64\bin\clang.exe -g -Wl,--whole-archive CMakeFiles\hxvm.dir/objects.a -Wl,--no-whole-archive -o product\hxvm.exe -Wl,--out-implib,libhxvm.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\hxvm.dir\linkLibs.rsp

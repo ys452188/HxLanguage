@@ -1,0 +1,232 @@
+
+---
+events:
+  -
+    kind: "message-v1"
+    backtrace:
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeDetermineSystem.cmake:205 (message)"
+      - "CMakeLists.txt"
+    message: |
+      The system is: Windows - 10.0.26200 - AMD64
+  -
+    kind: "message-v1"
+    backtrace:
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeDetermineCCompiler.cmake:123 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt"
+    message: |
+      Compiling the C compiler identification source file "CMakeCCompilerId.c" succeeded.
+      Compiler: D:/msys64/mingw64/bin/clang.exe 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "a.exe"
+      
+      The C compiler identification is Clang, found in:
+        C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/3.31.5/CompilerIdC/a.exe
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeDetermineCXXCompiler.cmake:126 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+      Compiler: D:/msys64/mingw64/bin/clang++.exe 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.exe"
+      
+      The CXX compiler identification is Clang, found in:
+        C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/3.31.5/CompilerIdCXX/a.exe
+      
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeDetermineCompilerABI.cmake:74 (try_compile)"
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt"
+    checks:
+      - "Detecting C compiler ABI info"
+    directories:
+      source: "C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-90qmos"
+      binary: "C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-90qmos"
+    cmakeVariables:
+      CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS: "D:/msys64/mingw64/bin/clang-scan-deps.exe"
+      CMAKE_C_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_C_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-90qmos'
+        
+        Run Build Command(s): D:/CMake/bin/cmake.exe -E env VERBOSE=1 D:/msys64/mingw64/bin/mingw32-make.exe -f Makefile cmTC_7ba8a/fast
+        D:/msys64/mingw64/bin/mingw32-make.exe  -f CMakeFiles\\cmTC_7ba8a.dir\\build.make CMakeFiles/cmTC_7ba8a.dir/build
+        mingw32-make[1]: Entering directory 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-90qmos'
+        Building C object CMakeFiles/cmTC_7ba8a.dir/CMakeCCompilerABI.c.obj
+        D:\\msys64\\mingw64\\bin\\clang.exe   -v -MD -MT CMakeFiles/cmTC_7ba8a.dir/CMakeCCompilerABI.c.obj -MF CMakeFiles\\cmTC_7ba8a.dir\\CMakeCCompilerABI.c.obj.d -o CMakeFiles\\cmTC_7ba8a.dir\\CMakeCCompilerABI.c.obj -c D:\\CMake\\share\\cmake-3.31\\Modules\\CMakeCCompilerABI.c
+        clang version 21.1.1 (https://github.com/msys2/MSYS2-packages 45f860c0dcdf3bb2bb5dccc5ffebe732deb1a9f8)
+        Target: x86_64-pc-windows-cygnus
+        Thread model: posix
+        InstalledDir: /mingw64/bin
+        Found candidate GCC installation: /usr/lib/gcc/x86_64-pc-cygwin/15.2.0
+        Selected GCC installation: /usr/lib/gcc/x86_64-pc-cygwin/15.2.0
+        Candidate multilib: .;@m64
+        Selected multilib: .;@m64
+         (in-process)
+         "/mingw64/bin/clang" -cc1 -triple x86_64-pc-windows-cygnus -emit-obj -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name "D:\\\\CMake\\\\share\\\\cmake-3.31\\\\Modules\\\\CMakeCCompilerABI.c" -mrelocation-model pic -pic-level 2 -mframe-pointer=none -fmath-errno -ffp-contract=on -fno-rounding-math -mconstructor-aliases -funwind-tables=2 -target-cpu x86-64 -tune-cpu generic -debugger-tuning=gdb -fdebug-compilation-dir=/c/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-90qmos -v -fcoverage-compilation-dir=/c/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-90qmos -resource-dir /mingw64/lib/clang/21 -dependency-file "CMakeFiles\\\\cmTC_7ba8a.dir\\\\CMakeCCompilerABI.c.obj.d" -MT CMakeFiles/cmTC_7ba8a.dir/CMakeCCompilerABI.c.obj -sys-header-deps -internal-isystem /usr/local/include -internal-isystem /mingw64/lib/clang/21/include -internal-isystem /usr/lib/gcc/x86_64-pc-cygwin/15.2.0/../../../../x86_64-pc-cygwin/include -internal-externc-isystem /include -internal-externc-isystem /usr/include -internal-externc-isystem /usr/include/w32api -ferror-limit 19 -femulated-tls -fgnuc-version=4.2.1 -fskip-odr-check-in-gmf -exception-model=seh -faddrsig -o "CMakeFiles\\\\cmTC_7ba8a.dir\\\\CMakeCCompilerABI.c.obj" -x c "D:\\\\CMake\\\\share\\\\cmake-3.31\\\\Modules\\\\CMakeCCompilerABI.c"
+        clang -cc1 version 21.1.1 based upon LLVM 21.1.1 default target x86_64-pc-windows-cygnus
+        ignoring nonexistent directory "/usr/local/include"
+        ignoring nonexistent directory "/mingw64/lib/clang/21/include"
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-pc-cygwin/15.2.0/../../../../x86_64-pc-cygwin/include"
+        ignoring nonexistent directory "/include"
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /usr/include
+         /usr/include/w32api
+        End of search list.
+        D:\\CMake\\share\\cmake-3.31\\Modules\\CMakeCCompilerABI.c:9:10: fatal error: 'CMakeCompilerABI.h' file not found
+            9 | #include "CMakeCompilerABI.h"
+              |          ^~~~~~~~~~~~~~~~~~~~
+        1 error generated.
+        mingw32-make[1]: *** [CMakeFiles\\cmTC_7ba8a.dir\\build.make:81: CMakeFiles/cmTC_7ba8a.dir/CMakeCCompilerABI.c.obj] Error 1
+        mingw32-make[1]: Leaving directory 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-90qmos'
+        mingw32-make: *** [Makefile:133: cmTC_7ba8a/fast] Error 2
+        
+      exitCode: 2
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeTestCCompiler.cmake:56 (try_compile)"
+      - "CMakeLists.txt"
+    checks:
+      - "Check for working C compiler: D:/msys64/mingw64/bin/clang.exe"
+    directories:
+      source: "C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-u4m46x"
+      binary: "C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-u4m46x"
+    cmakeVariables:
+      CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS: "D:/msys64/mingw64/bin/clang-scan-deps.exe"
+      CMAKE_C_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_C_COMPILER_WORKS"
+      cached: true
+      stdout: |
+        Change Dir: 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-u4m46x'
+        
+        Run Build Command(s): D:/CMake/bin/cmake.exe -E env VERBOSE=1 D:/msys64/mingw64/bin/mingw32-make.exe -f Makefile cmTC_b4aef/fast
+        D:/msys64/mingw64/bin/mingw32-make.exe  -f CMakeFiles\\cmTC_b4aef.dir\\build.make CMakeFiles/cmTC_b4aef.dir/build
+        mingw32-make[1]: Entering directory 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-u4m46x'
+        Building C object CMakeFiles/cmTC_b4aef.dir/testCCompiler.c.obj
+        D:\\msys64\\mingw64\\bin\\clang.exe    -MD -MT CMakeFiles/cmTC_b4aef.dir/testCCompiler.c.obj -MF CMakeFiles\\cmTC_b4aef.dir\\testCCompiler.c.obj.d -o CMakeFiles\\cmTC_b4aef.dir\\testCCompiler.c.obj -c C:\\Users\\Administrator\\Desktop\\HxLanguage\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4m46x\\testCCompiler.c
+        Linking C executable cmTC_b4aef.exe
+        D:\\CMake\\bin\\cmake.exe -E cmake_link_script CMakeFiles\\cmTC_b4aef.dir\\link.txt --verbose=1
+        D:\\CMake\\bin\\cmake.exe -E rm -f CMakeFiles\\cmTC_b4aef.dir/objects.a
+        D:\\msys64\\mingw64\\bin\\ar.exe qc CMakeFiles\\cmTC_b4aef.dir/objects.a @CMakeFiles\\cmTC_b4aef.dir\\objects1.rsp
+        D:\\msys64\\mingw64\\bin\\clang.exe -Wl,--whole-archive CMakeFiles\\cmTC_b4aef.dir/objects.a -Wl,--no-whole-archive -o cmTC_b4aef.exe -Wl,--out-implib,libcmTC_b4aef.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\\cmTC_b4aef.dir\\linkLibs.rsp
+        mingw32-make[1]: Leaving directory 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-u4m46x'
+        
+      exitCode: 0
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeDetermineCompilerABI.cmake:74 (try_compile)"
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt"
+    checks:
+      - "Detecting CXX compiler ABI info"
+    directories:
+      source: "C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-kjf0ji"
+      binary: "C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-kjf0ji"
+    cmakeVariables:
+      CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS: "D:/msys64/mingw64/bin/clang-scan-deps.exe"
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_SCAN_FOR_MODULES: "OFF"
+    buildResult:
+      variable: "CMAKE_CXX_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-kjf0ji'
+        
+        Run Build Command(s): D:/CMake/bin/cmake.exe -E env VERBOSE=1 D:/msys64/mingw64/bin/mingw32-make.exe -f Makefile cmTC_e9167/fast
+        D:/msys64/mingw64/bin/mingw32-make.exe  -f CMakeFiles\\cmTC_e9167.dir\\build.make CMakeFiles/cmTC_e9167.dir/build
+        mingw32-make[1]: Entering directory 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-kjf0ji'
+        Building CXX object CMakeFiles/cmTC_e9167.dir/CMakeCXXCompilerABI.cpp.obj
+        D:\\msys64\\mingw64\\bin\\clang++.exe   -v -MD -MT CMakeFiles/cmTC_e9167.dir/CMakeCXXCompilerABI.cpp.obj -MF CMakeFiles\\cmTC_e9167.dir\\CMakeCXXCompilerABI.cpp.obj.d -o CMakeFiles\\cmTC_e9167.dir\\CMakeCXXCompilerABI.cpp.obj -c D:\\CMake\\share\\cmake-3.31\\Modules\\CMakeCXXCompilerABI.cpp
+        clang version 21.1.1 (https://github.com/msys2/MSYS2-packages 45f860c0dcdf3bb2bb5dccc5ffebe732deb1a9f8)
+        Target: x86_64-pc-windows-cygnus
+        Thread model: posix
+        InstalledDir: /mingw64/bin
+        Found candidate GCC installation: /usr/lib/gcc/x86_64-pc-cygwin/15.2.0
+        Selected GCC installation: /usr/lib/gcc/x86_64-pc-cygwin/15.2.0
+        Candidate multilib: .;@m64
+        Selected multilib: .;@m64
+         (in-process)
+         "/mingw64/bin/clang++" -cc1 -triple x86_64-pc-windows-cygnus -emit-obj -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name "D:\\\\CMake\\\\share\\\\cmake-3.31\\\\Modules\\\\CMakeCXXCompilerABI.cpp" -mrelocation-model pic -pic-level 2 -mframe-pointer=none -fmath-errno -ffp-contract=on -fno-rounding-math -mconstructor-aliases -funwind-tables=2 -target-cpu x86-64 -tune-cpu generic -debugger-tuning=gdb -fdebug-compilation-dir=/c/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-kjf0ji -v -fcoverage-compilation-dir=/c/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-kjf0ji -resource-dir /mingw64/lib/clang/21 -dependency-file "CMakeFiles\\\\cmTC_e9167.dir\\\\CMakeCXXCompilerABI.cpp.obj.d" -MT CMakeFiles/cmTC_e9167.dir/CMakeCXXCompilerABI.cpp.obj -sys-header-deps -internal-isystem /usr/lib/gcc/x86_64-pc-cygwin/15.2.0/../../../gcc/x86_64-pc-cygwin/15.2.0/include/c++/ -internal-isystem /usr/lib/gcc/x86_64-pc-cygwin/15.2.0/../../../gcc/x86_64-pc-cygwin/15.2.0/include/c++//x86_64-pc-cygwin -internal-isystem /usr/lib/gcc/x86_64-pc-cygwin/15.2.0/../../../gcc/x86_64-pc-cygwin/15.2.0/include/c++//backward -internal-isystem /usr/local/include -internal-isystem /mingw64/lib/clang/21/include -internal-isystem /usr/lib/gcc/x86_64-pc-cygwin/15.2.0/../../../../x86_64-pc-cygwin/include -internal-externc-isystem /include -internal-externc-isystem /usr/include -internal-externc-isystem /usr/include/w32api -fdeprecated-macro -ferror-limit 19 -femulated-tls -fgnuc-version=4.2.1 -fskip-odr-check-in-gmf -fcxx-exceptions -fexceptions -exception-model=seh -faddrsig -o "CMakeFiles\\\\cmTC_e9167.dir\\\\CMakeCXXCompilerABI.cpp.obj" -x c++ "D:\\\\CMake\\\\share\\\\cmake-3.31\\\\Modules\\\\CMakeCXXCompilerABI.cpp"
+        clang -cc1 version 21.1.1 based upon LLVM 21.1.1 default target x86_64-pc-windows-cygnus
+        ignoring nonexistent directory "/usr/local/include"
+        ignoring nonexistent directory "/mingw64/lib/clang/21/include"
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-pc-cygwin/15.2.0/../../../../x86_64-pc-cygwin/include"
+        ignoring nonexistent directory "/include"
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /usr/lib/gcc/x86_64-pc-cygwin/15.2.0/../../../gcc/x86_64-pc-cygwin/15.2.0/include/c++
+         /usr/lib/gcc/x86_64-pc-cygwin/15.2.0/../../../gcc/x86_64-pc-cygwin/15.2.0/include/c++//x86_64-pc-cygwin
+         /usr/lib/gcc/x86_64-pc-cygwin/15.2.0/../../../gcc/x86_64-pc-cygwin/15.2.0/include/c++//backward
+         /usr/include
+         /usr/include/w32api
+        End of search list.
+        D:\\CMake\\share\\cmake-3.31\\Modules\\CMakeCXXCompilerABI.cpp:5:10: fatal error: 'CMakeCompilerABI.h' file not found
+            5 | #include "CMakeCompilerABI.h"
+              |          ^~~~~~~~~~~~~~~~~~~~
+        1 error generated.
+        mingw32-make[1]: *** [CMakeFiles\\cmTC_e9167.dir\\build.make:81: CMakeFiles/cmTC_e9167.dir/CMakeCXXCompilerABI.cpp.obj] Error 1
+        mingw32-make[1]: Leaving directory 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-kjf0ji'
+        mingw32-make: *** [Makefile:133: cmTC_e9167/fast] Error 2
+        
+      exitCode: 2
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "D:/CMake/share/cmake-3.31/Modules/CMakeTestCXXCompiler.cmake:56 (try_compile)"
+      - "CMakeLists.txt"
+    checks:
+      - "Check for working CXX compiler: D:/msys64/mingw64/bin/clang++.exe"
+    directories:
+      source: "C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-31u3q7"
+      binary: "C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-31u3q7"
+    cmakeVariables:
+      CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS: "D:/msys64/mingw64/bin/clang-scan-deps.exe"
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_SCAN_FOR_MODULES: "OFF"
+    buildResult:
+      variable: "CMAKE_CXX_COMPILER_WORKS"
+      cached: true
+      stdout: |
+        Change Dir: 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-31u3q7'
+        
+        Run Build Command(s): D:/CMake/bin/cmake.exe -E env VERBOSE=1 D:/msys64/mingw64/bin/mingw32-make.exe -f Makefile cmTC_119a4/fast
+        D:/msys64/mingw64/bin/mingw32-make.exe  -f CMakeFiles\\cmTC_119a4.dir\\build.make CMakeFiles/cmTC_119a4.dir/build
+        mingw32-make[1]: Entering directory 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-31u3q7'
+        Building CXX object CMakeFiles/cmTC_119a4.dir/testCXXCompiler.cxx.obj
+        D:\\msys64\\mingw64\\bin\\clang++.exe    -MD -MT CMakeFiles/cmTC_119a4.dir/testCXXCompiler.cxx.obj -MF CMakeFiles\\cmTC_119a4.dir\\testCXXCompiler.cxx.obj.d -o CMakeFiles\\cmTC_119a4.dir\\testCXXCompiler.cxx.obj -c C:\\Users\\Administrator\\Desktop\\HxLanguage\\build\\CMakeFiles\\CMakeScratch\\TryCompile-31u3q7\\testCXXCompiler.cxx
+        Linking CXX executable cmTC_119a4.exe
+        D:\\CMake\\bin\\cmake.exe -E cmake_link_script CMakeFiles\\cmTC_119a4.dir\\link.txt --verbose=1
+        D:\\CMake\\bin\\cmake.exe -E rm -f CMakeFiles\\cmTC_119a4.dir/objects.a
+        D:\\msys64\\mingw64\\bin\\ar.exe qc CMakeFiles\\cmTC_119a4.dir/objects.a @CMakeFiles\\cmTC_119a4.dir\\objects1.rsp
+        D:\\msys64\\mingw64\\bin\\clang++.exe -Wl,--whole-archive CMakeFiles\\cmTC_119a4.dir/objects.a -Wl,--no-whole-archive -o cmTC_119a4.exe -Wl,--out-implib,libcmTC_119a4.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\\cmTC_119a4.dir\\linkLibs.rsp
+        mingw32-make[1]: Leaving directory 'C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/CMakeScratch/TryCompile-31u3q7'
+        
+      exitCode: 0
+...

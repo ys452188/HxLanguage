@@ -1,0 +1,8 @@
+fun:main(void) -> {
+    stdout_putString("Hello, world!");
+    var:a:int;
+    ret: 0;
+}
+fun:foo(a:int&):int-> {
+    a++;
+}

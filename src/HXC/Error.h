@@ -18,7 +18,8 @@ typedef enum ErrorType {
   ERR_DEF_CLASS_DOUBLE_DEFINED_SYM,  // 定义类时重复声明符号
   ERR_FUN,
   ERR_FUN_ARG,
-  ERR_ARR_TYPE,
+  ERR_FUN_REPEATED,      // 函数重复定义
+  ERR_TYPE,
   ERR_MAIN,
   ERR_COUNLD_NOT_FIND_PARENT,
   ERR_UNKOWN_TYPE,
@@ -26,6 +27,7 @@ typedef enum ErrorType {
   ERR_CANNOT_FIND_SYMBOL,
   ERR_EXP,
   ERR_OUT_OF_VALUE,  // 数值溢出
+  ERR_CLASS_REPEATED // 类重复定义
 } ErrorType;
 
 void initLocale(void) {
@@ -125,7 +127,7 @@ void setError(ErrorType e, int errorLine, wchar_t* errCode) {
           errorMessageBuffer, ERROR_BUF_SIZE,
           L"\33[31m[ERR]定义函数的语法错误！\33[0m(位于第%d行)\n\33[36m["
           L"NOTE]\33[0m DefineFunction::= "
-          L"<\"fun\"><\":\"><id><\"(\"><args><\")\">[<\"->\"><id|kw>]<\"{\">."
+          L"<\"fun\"><\":\"><id><\"(\"><args><\")\">[<\":\"><id|kw>]<\"->\"><\"{\">."
           L"..<\"}\">\n定义函数::= "
           L"<\"定义函数\"><\"：\"><标识符><\"(\"><参数><\")\">[<\",\"><"
           L"\"它的返回值是\"><\"：\"><数据类型>]|[<\",\"><\"它没有返回类型\">]<"
@@ -144,9 +146,9 @@ void setError(ErrorType e, int errorLine, wchar_t* errCode) {
       break;
     }
 
-    case ERR_ARR_TYPE: {
+    case ERR_TYPE: {
       swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
-               L"\33[31m[ERR]数组类型拼写错误！\33[0m(位于第%d行)\n\33[36m["
+               L"\33[31m[ERR]类型拼写错误！\33[0m(位于第%d行)\n\33[36m["
                L"NOTE]\33[0m ArrayType::= <id|kw>[<\"[\"><\"]\">...]\n参数::= "
                L"<标识符|关键字>[<\"[\"><\"]\">...]",
                errorLine);
@@ -155,7 +157,7 @@ void setError(ErrorType e, int errorLine, wchar_t* errCode) {
 
     case ERR_MAIN: {
       swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
-               L"\33[31m[ERR]主函数拼写错误！\33[0m(位于第%d行)\n\33[36m[NOTE]"
+               L"\33[31m[ERR]主函数错误！\33[0m(位于第%d行)\n\33[36m[NOTE]"
                L"\33[0m 主函数不能重载！\n",
                errorLine);
       break;
@@ -207,6 +209,18 @@ void setError(ErrorType e, int errorLine, wchar_t* errCode) {
     case ERR_GLOBAL_UNKOWN: {
       swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
                L"\33[31m[ERR]未知的全局定义！\33[0m(位于第%d行)\n", errorLine);
+      break;
+    }
+
+    case ERR_FUN_REPEATED: {
+      swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
+               L"\33[31m[ERR]函数重复定义！\33[0m(位于第%d行)\n", errorLine);
+      break;
+    }
+
+    case ERR_CLASS_REPEATED: {
+      swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
+               L"\33[31m[ERR]类重复定义！\33[0m(位于第%d行)\n", errorLine);
       break;
     }
   }

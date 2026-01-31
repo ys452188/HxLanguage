@@ -20,10 +20,6 @@ FILE* errorStream = NULL;
 
 int main(int argc, char* argv[]) {
   initLocale();
-  if (argc < 2) {
-    fwprintf(stderr, L"\33[31m[ERR]\33[0m请提供源文件路径！\n");
-    return -1;
-  }
   clock_t start, end;
   start = clock();
   outputStream = stdout;
@@ -33,6 +29,10 @@ int main(int argc, char* argv[]) {
   _setmode(_fileno(stdout), _O_U16TEXT);
   _setmode(_fileno(stderr), _O_U16TEXT);
 #endif
+  if (argc < 2) {
+    fwprintf(stdout, L"\33[31m[ERR]\33[0m请提供源文件路径！\n");
+    return -1;
+  }
   // 读取源文件
   wchar_t* src = NULL;
   int scannerError = readSourceFile(argv[1], &src);

@@ -37,6 +37,7 @@ typedef struct instruction {
 } instruction;
 // 过程,用索引访问
 typedef struct Procedure {
+  uint16_t paramSize; // 参数数量
   instruction* instructions;
   uint32_t stackSize;     // 栈大小
   uint32_t localVarSize;  // 局部变量数量

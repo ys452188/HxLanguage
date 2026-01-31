@@ -1,6 +1,7 @@
 #ifndef HXLANG_SRC_HXC_IR_H
 #define HXLANG_SRC_HXC_IR_H
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <wchar.h>
 
@@ -13,71 +14,87 @@ typedef enum IR_DataTypeKind {
   IR_DT_STRING,
   IR_DT_CHAR,
   IR_DT_BOOL,
+  IR_DT_INT_ARR, // 数组
+  IR_DT_FLOAT_ARR,
+  IR_DT_STRING_ARR,
+  IR_DT_CHAR_ARR,
+  IR_DT_BOOL_ARR,
+  IR_DT_CUSTOM_ARR,
+  IR_DT_INT_REFER, // 引用类型
+  IR_DT_FLOAT_REFER,
+  IR_DT_STRING_REFER,
+  IR_DT_CHAR_REFER,
+  IR_DT_BOOL_REFER,
+  IR_DT_CUSTOM_REFER,
   IR_DT_VOID,
   IR_DT_CUSTOM
 } IR_DataTypeKind;
 typedef struct IR_DataType {
   IR_DataTypeKind kind;
-  wchar_t* custom_type_name;  // 当kind为IR_DT_CUSTOM 时使用
+  wchar_t *custom_type_name; // 当kind为IR_DT_CUSTOM 时使用
 } IR_DataType;
 //-----------------------------------------------------------
 typedef struct IR_FunctionParam {
-  wchar_t* name;
+  wchar_t *name;
   IR_DataType type;
 } IR_FunctionParam;
 typedef struct IR_Function {
-  wchar_t* name;
-  IR_FunctionParam* params;
+  wchar_t *name;
+  IR_FunctionParam *params;
   int param_count;
   bool isReturnTypeKnown;
   IR_DataType return_type;
-  Token* body_tokens;  // 函数体的Token流
+  Token *body_tokens; // 函数体的Token流
   int body_token_count;
 } IR_Function;
 //-------------------------------------------------------------
 typedef struct IR_Variable {
-  wchar_t* name;
+  wchar_t *name;
   IR_DataType type;
   bool isTypeKnown;
   bool isOnlyRead;
-  int address;  // 变量在符号号表中的地址
+  int address; // 变量在符号号表中的地址
 } IR_Variable;
 //-------------------------------------------------------------
 typedef union IR_ClassMemberData {
-  IR_Variable* variable;
-  IR_Function* function;
+  IR_Variable *variable;
+  IR_Function *function;
 } IR_ClassMemberData;
 typedef struct IR_ClassMember {
   enum IR_ClassMemberType { IR_CM_VARIABLE, IR_CM_FUNCTION } type;
   IR_ClassMemberData data;
 } IR_ClassMember;
 typedef struct IR_ClassBody {
-  IR_ClassMember* publicMembers;
+  IR_ClassMember *publicMembers;
   int public_member_count;
-  IR_ClassMember* privateMembers;
+  IR_ClassMember *privateMembers;
   int private_member_count;
-  IR_ClassMember* protectedMembers;
+  IR_ClassMember *protectedMembers;
   int protected_member_count;
 } IR_ClassBody;
 typedef struct IR_Class {
-  wchar_t* name;
-  wchar_t* parent_name;  // 父类名
-  int fatherIndex;       // 父类在类表中的索引，-1表示无父类
+  int line; // 类定义所在行号
+  wchar_t *name;
+  wchar_t *parent_name; // 父类名
+  int fatherIndex;      // 父类在类表中的索引，-1表示无父类
 
   IR_ClassBody body;
+
+  int size; // 类的大小，单位：字节
 } IR_Class;
 //---------------------------------------------------------------
 typedef struct IR_Program {
-  IR_Variable** global_variables;
+  IR_Variable **global_variables;
   int global_variable_count;
-  IR_Function** functions;
+  IR_Function **functions;
   int function_count;
-  IR_Class** classes;
+  IR_Class **classes;
   int class_count;
 } IR_Program;
 
+#include "Checker.h"
 #ifdef HX_DEBUG
-void showFunctionInfo(IR_Function* function);
+void showFunctionInfo(IR_Function *function);
 #endif
 /**
  * 解析函数定义
@@ -85,31 +102,33 @@ void showFunctionInfo(IR_Function* function);
  * @param index 当前解析到的Token索引，解析完成后会更新为下一个未解析的Token索引
  * @param err 错误码指针，发生错误时会设置为相应错误码
  */
-IR_Function* parseFunction(Tokens* tokens, int* index, int* err);
+IR_Function *parseFunction(Tokens *tokens, int *index, int *err);
 /**
  * 解析类定义
  * @param tokens 词法分析得到的Token流
  * @param index 当前解析到的Token索引，解析完成后会更新为下一个未解析的Token索引
  * @param err 错误码指针，发生错误时会设置为相应错误码
  */
-IR_Class* parseClass(Tokens* tokens, int* index, int* err);
+IR_Class *parseClass(Tokens *tokens, int *index, int *err);
 /** 生成中间表示
  * @param tokens 词法分析得到的Token流
  * @param err 错误码指针，发生错误时会设置为相应错误码
  */
-IR_Program* generateIR(Tokens* tokens, int* err);  // 生成中间表示
+IR_Program *generateIR(Tokens *tokens, int *err); // 生成中间表示
 /** 解析全局或类中的变量定义(不能赋初值)
  * @param tokens 词法分析得到的Token流
  * @param index 当前解析到的Token索引，解析完成后会更新为下一个未解析的Token索引
  * @param err 错误码指针，发生错误时会设置为相应错误码
  */
-IR_Variable* parseGlobalOrClassVariable(Tokens* tokens, int* index, int* err);
+IR_Variable *parseGlobalOrClassVariable(Tokens *tokens, int *index, int *err);
 /*释放IR*/
-void freeIRProgram(IR_Program** program);
+void freeIRProgram(IR_Program **program);
+static int getClassSize(IR_Class *cls, IR_Program *);
 //----------------------------------------------------------------------------------------------
-IR_Program* generateIR(Tokens* tokens, int* err) {
+IR_Program *generateIR(Tokens *tokens, int *err) {
   if (!tokens) {
-    if (err) *err = -1;
+    if (err)
+      *err = -1;
     return NULL;
   }
   if (tokens->count == 0) {
@@ -117,9 +136,10 @@ IR_Program* generateIR(Tokens* tokens, int* err) {
     setError(ERR_NO_MAIN, 0, NULL);
     return NULL;
   }
-  IR_Program* program = (IR_Program*)calloc(1, sizeof(IR_Program));
+  IR_Program *program = (IR_Program *)calloc(1, sizeof(IR_Program));
   if (!program) {
-    if (err) *err = -1;
+    if (err)
+      *err = -1;
     return NULL;
   }
   int index = 0;
@@ -133,39 +153,74 @@ IR_Program* generateIR(Tokens* tokens, int* err) {
 #ifdef HX_DEBUG
         log(L"解析到一个函数定义");
 #endif
-        IR_Function* func = parseFunction(tokens, &index, err);
+        IR_Function *func = parseFunction(tokens, &index, err);
         if (!func) {
           // 解析函数出错
           free(program);
           return NULL;
         }
-        program->function_count++;
-        program->functions = (IR_Function**)realloc(
-            program->functions, program->function_count * sizeof(IR_Function*));
-        if (!program->functions) {
-          if (err) *err = -1;
-          free(func);
-          free(program);
+        int index = isFunctionRepeatDefine(func, program->functions,
+                                           program->function_count);
+        if (index == -255) {
+          // 函数重复定义错误已处理
+          freeIRProgram(&program);
+          *err = 255;
           return NULL;
+        } else if (index == -1) {
+          // 函数未声明，继续添加
+          program->function_count++;
+          program->functions = (IR_Function **)realloc(
+              program->functions,
+              program->function_count * sizeof(IR_Function *));
+          if (!program->functions) {
+            if (err)
+              *err = -1;
+            free(func);
+            free(program);
+            return NULL;
+          }
+          program->functions[program->function_count - 1] = func;
+        } else {
+          // 函数已声明，进行定义
+          if (program->functions[index]->name)
+            free(program->functions[index]->name);
+          if (program->functions[index]->params) {
+            for (int i = 0; i < program->functions[index]->param_count; i++) {
+              if (program->functions[index]->params[i].name)
+                free(program->functions[index]->params[i].name);
+            }
+            free(program->functions[index]->params);
+          }
+          if (program->functions[index]->return_type.custom_type_name)
+            free(program->functions[index]->return_type.custom_type_name);
+          free(program->functions[index]);
+          program->functions[index] = func;
+          continue;
         }
-        program->functions[program->function_count - 1] = func;
-
       } else if (wcscmp(tokens->tokens[index].value, L"定义类") == 0 ||
                  wcscmp(tokens->tokens[index].value, L"class") == 0) {
 #ifdef HX_DEBUG
         log(L"解析到一个类定义");
 #endif
-        IR_Class* cls = parseClass(tokens, &index, err);
+        IR_Class *cls = parseClass(tokens, &index, err);
         if (!cls) {
           // 解析类出错
-          free(program);
+          freeIRProgram(&program);
+          return NULL;
+        }
+        if (isClassRepeatDefine(cls, program->classes, program->class_count) ==
+            255) {
+          // 类重复定义错误已处理
+          freeIRProgram(&program);
+          *err = 255;
           return NULL;
         }
         program->class_count++;
-        program->classes = (IR_Class**)realloc(
-            program->classes, program->class_count * sizeof(IR_Class*));
+        program->classes = (IR_Class **)realloc(
+            program->classes, program->class_count * sizeof(IR_Class *));
         if (!program->classes) {
-          if (err) *err = -1;
+          if (err)
+            *err = -1;
           free(cls);
           free(program);
           return NULL;
@@ -177,17 +232,18 @@ IR_Program* generateIR(Tokens* tokens, int* err) {
 #ifdef HX_DEBUG
         log(L"解析到一个全局变量定义");
 #endif
-        IR_Variable* var = parseGlobalOrClassVariable(tokens, &index, err);
+        IR_Variable *var = parseGlobalOrClassVariable(tokens, &index, err);
         if (!var || *err) {
           free(program);
           return NULL;
         }
         program->global_variable_count++;
-        program->global_variables = (IR_Variable**)realloc(
+        program->global_variables = (IR_Variable **)realloc(
             program->global_variables,
-            program->global_variable_count * sizeof(IR_Variable*));
+            program->global_variable_count * sizeof(IR_Variable *));
         if (!program->global_variables) {
-          if (err) *err = -1;
+          if (err)
+            *err = -1;
           free(var);
           free(program);
           return NULL;
@@ -201,7 +257,8 @@ IR_Program* generateIR(Tokens* tokens, int* err) {
         // 未知的全局定义
         setError(ERR_GLOBAL_UNKOWN, tokens->tokens[index].line,
                  tokens->tokens[index].value);
-        if (err) *err = 255;
+        if (err)
+          *err = 255;
         free(program);
         return NULL;
       }
@@ -209,7 +266,8 @@ IR_Program* generateIR(Tokens* tokens, int* err) {
       // 未知的全局定义
       setError(ERR_GLOBAL_UNKOWN, tokens->tokens[index].line,
                tokens->tokens[index].value);
-      if (err) *err = 255;
+      if (err)
+        *err = 255;
       free(program);
       return NULL;
     }
@@ -222,25 +280,31 @@ IR_Program* generateIR(Tokens* tokens, int* err) {
                L"[DBG] generateIR: no progress at index=%d type=%d line=%d "
                L"value_ptr=%p\n",
                index, tokens->tokens[index].type, tokens->tokens[index].line,
-               (void*)tokens->tokens[index].value);
+               (void *)tokens->tokens[index].value);
 #endif
-      setError(
-          ERR_FUN, tokens->tokens[index].line,
-          tokens->tokens[index].value ? tokens->tokens[index].value : L" ");
-      if (err) *err = 255;
+      setError(ERR_FUN, tokens->tokens[index].line,
+               tokens->tokens[index].value ? tokens->tokens[index].value
+                                           : L" ");
+      if (err)
+        *err = 255;
       free(program);
       return NULL;
     }
   }
+  // 设置类大小
+  for (int i = 0; i < program->class_count; i++) {
+    program->classes[i]->size = getClassSize(program->classes[i], program);
+  }
   return program;
 }
-void freeIRProgram(IR_Program** program) {
-  if (!program || !*program) return;
+void freeIRProgram(IR_Program **program) {
+  if (!program || !*program)
+    return;
   if (*program) {
     // 释放程序中的所有函数
     if ((*program)->functions) {
       for (int i = 0; i < (*program)->function_count; i++) {
-        IR_Function* func = (*program)->functions[i];
+        IR_Function *func = (*program)->functions[i];
         if (func) {
           if (func->name) {
             free(func->name);
@@ -270,7 +334,7 @@ void freeIRProgram(IR_Program** program) {
     // 释放程序中的所有类
     if ((*program)->classes) {
       for (int i = 0; i < (*program)->class_count; i++) {
-        IR_Class* cls = (*program)->classes[i];
+        IR_Class *cls = (*program)->classes[i];
         if (cls) {
           if (cls->name) {
             free(cls->name);
@@ -295,7 +359,7 @@ void freeIRProgram(IR_Program** program) {
                   member.data.variable = NULL;
                 }
               } else if (member.type == IR_CM_FUNCTION) {
-                IR_Function* func = member.data.function;
+                IR_Function *func = member.data.function;
                 if (func) {
                   if (func->name) {
                     free(func->name);
@@ -337,7 +401,7 @@ void freeIRProgram(IR_Program** program) {
                   member.data.variable = NULL;
                 }
               } else if (member.type == IR_CM_FUNCTION) {
-                IR_Function* func = member.data.function;
+                IR_Function *func = member.data.function;
                 if (func) {
                   if (func->name) {
                     free(func->name);
@@ -366,7 +430,6 @@ void freeIRProgram(IR_Program** program) {
             cls->body.privateMembers = NULL;
           }
         }
-        //~~~~~~~
         if (cls->body.protectedMembers) {
           for (int j = 0; j < cls->body.protected_member_count; j++) {
             IR_ClassMember member = cls->body.protectedMembers[j];
@@ -380,7 +443,7 @@ void freeIRProgram(IR_Program** program) {
                 member.data.variable = NULL;
               }
             } else if (member.type == IR_CM_FUNCTION) {
-              IR_Function* func = member.data.function;
+              IR_Function *func = member.data.function;
               if (func) {
                 if (func->name) {
                   free(func->name);
@@ -413,7 +476,7 @@ void freeIRProgram(IR_Program** program) {
     // 释放程序中的所有全局变量
     if ((*program)->global_variables) {
       for (int i = 0; i < (*program)->global_variable_count; i++) {
-        IR_Variable* var = (*program)->global_variables[i];
+        IR_Variable *var = (*program)->global_variables[i];
         if (var) {
           if (var->name) {
             free(var->name);
@@ -431,7 +494,7 @@ void freeIRProgram(IR_Program** program) {
   program = NULL;
 }
 // 根据字符串解析数据类型
-static IR_DataType parseDataType(wchar_t* typeStr) {
+static IR_DataType parseDataTypeByString(wchar_t *typeStr) {
   IR_DataType dt;
   if (wcscmp(typeStr, L"int") == 0) {
     dt.kind = IR_DT_INT;
@@ -462,51 +525,113 @@ static IR_DataType parseDataType(wchar_t* typeStr) {
   } else {
     dt.kind = IR_DT_CUSTOM;
     dt.custom_type_name =
-        (wchar_t*)calloc(wcslen(typeStr) + 1, sizeof(wchar_t));
+        (wchar_t *)calloc(wcslen(typeStr) + 1, sizeof(wchar_t));
     if (dt.custom_type_name) {
       wcscpy(dt.custom_type_name, typeStr);
     }
   }
   return dt;
 }
+IR_DataType parseDataType(Tokens *tokens, int *index, int size, int *err) {
+  IR_DataType dt = {0};
+  if (!tokens || !index || size < 1) {
+    *err = -1;
+    return dt;
+  }
+  if (tokens->tokens[*index].type != TOK_ID) {
+    return dt;
+  }
+  dt = parseDataTypeByString(tokens->tokens[*index].value);
+  if ((*index + 1) < tokens->count) {
+    (*index)++;
+    // 若为 []则为数组类型
+    if (tokens->tokens[*index].type == TOK_OPR_LBRACKET) {
+      if (dt.kind == IR_DT_INT) {
+        dt.kind = IR_DT_INT_ARR;
+      } else if (dt.kind == IR_DT_FLOAT) {
+        dt.kind = IR_DT_FLOAT_ARR;
+      } else if (dt.kind == IR_DT_STRING) {
+        dt.kind = IR_DT_STRING_ARR;
+      } else if (dt.kind == IR_DT_CHAR) {
+        dt.kind = IR_DT_CHAR_ARR;
+      } else if (dt.kind == IR_DT_BOOL) {
+        dt.kind = IR_DT_BOOL_ARR;
+      } else if (dt.kind == IR_DT_CUSTOM) {
+        dt.kind = IR_DT_CUSTOM_ARR;
+      }
+      (*index)++;
+      if ((*index + 1) < tokens->count &&
+          tokens->tokens[*index].type == TOK_OPR_RBRACKET) {
+        //(*index)++;
+      } else {
+        *err = 255; // 语法错误
+        setError(ERR_TYPE, tokens->tokens[*index].line, NULL);
+        return dt;
+      }
+    }
+    // 若为 &则为引用类型
+    else if (tokens->tokens[*index].type == TOK_OPR_REFER) {
+      if (dt.kind == IR_DT_INT) {
+        dt.kind = IR_DT_INT_REFER;
+      } else if (dt.kind == IR_DT_FLOAT) {
+        dt.kind = IR_DT_FLOAT_REFER;
+      } else if (dt.kind == IR_DT_STRING) {
+        dt.kind = IR_DT_STRING_REFER;
+      } else if (dt.kind == IR_DT_CHAR) {
+        dt.kind = IR_DT_CHAR_REFER;
+      } else if (dt.kind == IR_DT_BOOL) {
+        dt.kind = IR_DT_BOOL_REFER;
+      } else if (dt.kind == IR_DT_CUSTOM) {
+        dt.kind = IR_DT_CUSTOM_REFER;
+      }
+      //(*index)++;
+    }
+    else {
+      // 不是数组或引用类型，回退索引
+      (*index)--;
+    }
+  }
+  return dt;
+}
 // 定义变量::= 变量:标识符[,它的类型是:数据类型];
-static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index,
-                                                  int* err, bool isOnlyRead) {
+static IR_Variable *parseGlobalOrClassVariable_CN(Tokens *tokens, int *index,
+                                                  int *err, bool isOnlyRead) {
   if (!tokens || !index || !err) {
-    if (err) *err = -1;
+    if (err)
+      *err = -1;
     return NULL;
   }
   if ((*index + 1) >= tokens->count) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     return NULL;
   }
   (*index)++;
   if (tokens->tokens[*index].type != TOK_OPR_COLON) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     return NULL;
   }
   if ((*index + 1) >= tokens->count) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     return NULL;
   }
   (*index)++;
   if (tokens->tokens[*index].type != TOK_ID) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     return NULL;
   }
-  IR_Variable* var = (IR_Variable*)calloc(1, sizeof(IR_Variable));
+  IR_Variable *var = (IR_Variable *)calloc(1, sizeof(IR_Variable));
   if (!var) {
     *err = -1;
     return NULL;
   }
   var->isTypeKnown = false;
   var->isOnlyRead = isOnlyRead;
-  var->name = (wchar_t*)calloc(wcslen(tokens->tokens[*index].value) + 1,
-                               sizeof(wchar_t));
+  var->name = (wchar_t *)calloc(wcslen(tokens->tokens[*index].value) + 1,
+                                sizeof(wchar_t));
   if (!var->name) {
     *err = -1;
     free(var);
@@ -518,7 +643,7 @@ static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index,
 #endif
   // 类型 ,它的类型是:
   if ((*index + 1) >= tokens->count) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     free(var->name);
     free(var);
@@ -527,7 +652,7 @@ static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index,
   (*index)++;
   if (tokens->tokens[*index].type == TOK_OPR_COMMA) {
     if ((*index + 1) >= tokens->count) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
       free(var->name);
       free(var);
@@ -535,21 +660,21 @@ static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index,
     }
     (*index)++;
     if (tokens->tokens[*index].type != TOK_ID) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
       free(var->name);
       free(var);
       return NULL;
     }
     if (wcscmp(tokens->tokens[*index].value, L"它的类型是") != 0) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
       free(var->name);
       free(var);
       return NULL;
     }
     if ((*index + 1) >= tokens->count) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
       free(var->name);
       free(var);
@@ -557,31 +682,37 @@ static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index,
     }
     (*index)++;
     if (tokens->tokens[*index].type != TOK_OPR_COLON) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
       free(var->name);
       free(var);
       return NULL;
     }
     if ((*index + 1) >= tokens->count) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
       free(var->name);
       free(var);
       return NULL;
     }
     (*index)++;
+    // 数据类型
     if (tokens->tokens[*index].type != TOK_ID) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
       free(var->name);
       free(var);
       return NULL;
     }
     var->isTypeKnown = true;
-    var->type = parseDataType(tokens->tokens[*index].value);
+    var->type = parseDataType(tokens, index, tokens->count, err);
+    if (*err != 0) {
+      free(var->name);
+      free(var);
+      return NULL;
+    }
     if (var->type.kind == IR_DT_CUSTOM) {
-      var->type.custom_type_name = (wchar_t*)calloc(
+      var->type.custom_type_name = (wchar_t *)calloc(
           wcslen(tokens->tokens[*index].value) + 1, sizeof(wchar_t));
       if (!var->type.custom_type_name) {
         *err = -1;
@@ -592,10 +723,11 @@ static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index,
       wcscpy(var->type.custom_type_name, tokens->tokens[*index].value);
     }
     if ((*index + 1) >= tokens->count) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
       if (var->type.kind == IR_DT_CUSTOM) {
-        if (var->type.custom_type_name) free(var->type.custom_type_name);
+        if (var->type.custom_type_name)
+          free(var->type.custom_type_name);
       }
       free(var->name);
       free(var);
@@ -608,7 +740,8 @@ static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index,
     *err = 255;
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     if (var->type.kind == IR_DT_CUSTOM) {
-      if (var->type.custom_type_name) free(var->type.custom_type_name);
+      if (var->type.custom_type_name)
+        free(var->type.custom_type_name);
     }
     free(var->name);
     free(var);
@@ -617,43 +750,44 @@ static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index,
   (*index)++;
   return var;
 }
-// 定义变量::= var:标识符[->数据类型];
-static IR_Variable* parseGlobalOrClassVariable_EN(Tokens* tokens, int* index,
-                                                  int* err, bool isOnlyRead) {
+// 定义变量::= var:标识符[:数据类型];
+static IR_Variable *parseGlobalOrClassVariable_EN(Tokens *tokens, int *index,
+                                                  int *err, bool isOnlyRead) {
   if (!tokens || !index || !err) {
-    if (err) *err = -1;
+    if (err)
+      *err = -1;
     return NULL;
   }
   if (*index + 1 >= tokens->count) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     return NULL;
   }
   (*index)++;
   if (tokens->tokens[*index].type != TOK_OPR_COLON) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     return NULL;
   }
   if (*index + 1 >= tokens->count) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     return NULL;
   }
   (*index)++;
   if (tokens->tokens[*index].type != TOK_ID) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     return NULL;
   }
-  IR_Variable* var = (IR_Variable*)calloc(1, sizeof(IR_Variable));
+  IR_Variable *var = (IR_Variable *)calloc(1, sizeof(IR_Variable));
   var->isOnlyRead = isOnlyRead;
   if (!var) {
     *err = -1;
     return NULL;
   }
-  var->name = (wchar_t*)calloc(wcslen(tokens->tokens[*index].value) + 1,
-                               sizeof(wchar_t));
+  var->name = (wchar_t *)calloc(wcslen(tokens->tokens[*index].value) + 1,
+                                sizeof(wchar_t));
   if (!var->name) {
     *err = -1;
     free(var);
@@ -665,7 +799,7 @@ static IR_Variable* parseGlobalOrClassVariable_EN(Tokens* tokens, int* index,
 #endif
   // 类型 ->
   if (*index + 1 >= tokens->count) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     free(var->name);
     free(var);
@@ -673,10 +807,10 @@ static IR_Variable* parseGlobalOrClassVariable_EN(Tokens* tokens, int* index,
   }
   (*index)++;
   var->isTypeKnown = false;
-  if (tokens->tokens[*index].type == TOK_OPR_POINT) {
+  if (tokens->tokens[*index].type == TOK_OPR_COLON) {
     var->isTypeKnown = true;
     if (*index + 1 >= tokens->count) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
       free(var->name);
       free(var);
@@ -684,15 +818,20 @@ static IR_Variable* parseGlobalOrClassVariable_EN(Tokens* tokens, int* index,
     }
     (*index)++;
     if (tokens->tokens[*index].type != TOK_ID) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
       free(var->name);
       free(var);
       return NULL;
     }
-    var->type = parseDataType(tokens->tokens[*index].value);
+    var->type = parseDataType(tokens, index, tokens->count, err);
+    if (*err != 0) {
+      free(var->name);
+      free(var);
+      return NULL;
+    }
     if (var->type.kind == IR_DT_CUSTOM) {
-      var->type.custom_type_name = (wchar_t*)calloc(
+      var->type.custom_type_name = (wchar_t *)calloc(
           wcslen(tokens->tokens[*index].value) + 1, sizeof(wchar_t));
       if (!var->type.custom_type_name) {
         *err = -1;
@@ -706,7 +845,8 @@ static IR_Variable* parseGlobalOrClassVariable_EN(Tokens* tokens, int* index,
       *err = 255;
       setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
       if (var->type.kind == IR_DT_CUSTOM) {
-        if (var->type.custom_type_name) free(var->type.custom_type_name);
+        if (var->type.custom_type_name)
+          free(var->type.custom_type_name);
       }
       free(var->name);
       free(var);
@@ -719,7 +859,8 @@ static IR_Variable* parseGlobalOrClassVariable_EN(Tokens* tokens, int* index,
     *err = 255;
     setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
     if (var->type.kind == IR_DT_CUSTOM) {
-      if (var->type.custom_type_name) free(var->type.custom_type_name);
+      if (var->type.custom_type_name)
+        free(var->type.custom_type_name);
     }
     free(var->name);
     free(var);
@@ -728,9 +869,10 @@ static IR_Variable* parseGlobalOrClassVariable_EN(Tokens* tokens, int* index,
   (*index)++;
   return var;
 }
-IR_Variable* parseGlobalOrClassVariable(Tokens* tokens, int* index, int* err) {
+IR_Variable *parseGlobalOrClassVariable(Tokens *tokens, int *index, int *err) {
   if (!tokens || !index || !err) {
-    if (err) *err = -1;
+    if (err)
+      *err = -1;
     return NULL;
   }
   if (wcscmp(tokens->tokens[*index].value, L"var") == 0) {
@@ -746,10 +888,10 @@ IR_Variable* parseGlobalOrClassVariable(Tokens* tokens, int* index, int* err) {
 }
 // 解析函数参数列表
 // 参数::= 标识符：数据类型
-static IR_FunctionParam* parseFunctionParams(Tokens* tokens, int* index,
-                                             int* param_count, int* err) {
+static IR_FunctionParam *parseFunctionParams(Tokens *tokens, int *index,
+                                             int *param_count, int *err) {
   *param_count = 0;
-  IR_FunctionParam* params = NULL;
+  IR_FunctionParam *params = NULL;
   if (tokens->tokens[*index].type == TOK_OPR_RQUOTE) {
     return NULL;
   }
@@ -764,18 +906,35 @@ static IR_FunctionParam* parseFunctionParams(Tokens* tokens, int* index,
       break;
     }
     if (tokens->tokens[*index].type != TOK_ID) {
-      *err = 255;  // 语法错误
+#ifdef HX_DEBUG
+      fwprintf(
+          logStream,
+          L"[DBG] parseFunctionParams: token at index=%d type=%d line=%d\n",
+          *index, tokens->tokens[*index].type, tokens->tokens[*index].line);
+      int start = *index - 3;
+      if (start < 0)
+        start = 0;
+      int end = *index + 3;
+      if (end >= tokens->count)
+        end = tokens->count - 1;
+      for (int k = start; k <= end; k++) {
+        fwprintf(logStream, L"\tidx=%d type=%d line=%d value=\"%ls\"\n", k,
+                 tokens->tokens[k].type, tokens->tokens[k].line,
+                 tokens->tokens[k].value ? tokens->tokens[k].value : L"(null)");
+      }
+#endif
+      *err = 255; // 语法错误
       setError(ERR_FUN_ARG, tokens->tokens[*index].line, NULL);
       return NULL;
     }
     (*param_count)++;
-    params = (IR_FunctionParam*)realloc(
-        params, (*param_count) * sizeof(IR_FunctionParam));
+    params = (IR_FunctionParam *)realloc(params, (*param_count) *
+                                                     sizeof(IR_FunctionParam));
     if (!params) {
       *err = -1;
       return NULL;
     }
-    params[(*param_count) - 1].name = (wchar_t*)calloc(
+    params[(*param_count) - 1].name = (wchar_t *)calloc(
         wcslen(tokens->tokens[*index].value) + 1, sizeof(wchar_t));
     if (!params[(*param_count) - 1].name) {
       *err = -1;
@@ -784,7 +943,7 @@ static IR_FunctionParam* parseFunctionParams(Tokens* tokens, int* index,
     }
     wcscpy(params[(*param_count) - 1].name, tokens->tokens[*index].value);
     if ((*index + 1) >= tokens->count) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_FUN_ARG, tokens->tokens[*index].line, NULL);
       // 释放已分配的内存
       for (int i = 0; i < (*param_count); i++) {
@@ -796,7 +955,7 @@ static IR_FunctionParam* parseFunctionParams(Tokens* tokens, int* index,
     (*index)++;
     // 解析冒号
     if (tokens->tokens[*index].type != TOK_OPR_COLON) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_FUN_ARG, tokens->tokens[*index].line, NULL);
       // 释放已分配的内存
       for (int i = 0; i < (*param_count); i++) {
@@ -806,7 +965,7 @@ static IR_FunctionParam* parseFunctionParams(Tokens* tokens, int* index,
       return NULL;
     }
     if ((*index + 1) >= tokens->count) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_FUN_ARG, tokens->tokens[*index].line, NULL);
       // 释放已分配的内存
       for (int i = 0; i < (*param_count); i++) {
@@ -818,7 +977,7 @@ static IR_FunctionParam* parseFunctionParams(Tokens* tokens, int* index,
     (*index)++;
     // 解析数据类型
     if (tokens->tokens[*index].type != TOK_ID) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_FUN_ARG, tokens->tokens[*index].line, NULL);
       // 释放已分配的内存
       for (int i = 0; i < (*param_count); i++) {
@@ -828,10 +987,19 @@ static IR_FunctionParam* parseFunctionParams(Tokens* tokens, int* index,
       return NULL;
     }
     params[(*param_count) - 1].type =
-        parseDataType(tokens->tokens[*index].value);
+        parseDataType(tokens, index, tokens->count, err);
+    if (*err != 0) {
+      // 释放已分配的内存
+      for (int i = 0; i < (*param_count); i++) {
+        free(params[i].name);
+      }
+      free(params);
+      return NULL;
+    }
+
     // 下一参数或结束
     if ((*index + 1) >= tokens->count) {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_FUN, tokens->tokens[*index].line, NULL);
       // 释放已分配的内存
       for (int i = 0; i < (*param_count); i++) {
@@ -846,7 +1014,7 @@ static IR_FunctionParam* parseFunctionParams(Tokens* tokens, int* index,
     } else if (tokens->tokens[*index].type == TOK_OPR_RQUOTE) {
       break;
     } else {
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       setError(ERR_FUN_ARG, tokens->tokens[*index].line, NULL);
       // 释放已分配的内存
       for (int i = 0; i < (*param_count); i++) {
@@ -858,13 +1026,14 @@ static IR_FunctionParam* parseFunctionParams(Tokens* tokens, int* index,
   }
   return params;
 }
-static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
+// 函数定义::= 函数:标识符(参数列表)[,它的返回类型是:数据类型]{函数体}
+static IR_Function *parseFunction_CN(Tokens *tokens, int *index, int *err) {
   if ((*index + 1) >= tokens->count) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
     return NULL;
   }
-  IR_Function* function = (IR_Function*)calloc(1, sizeof(IR_Function));
+  IR_Function *function = (IR_Function *)calloc(1, sizeof(IR_Function));
   if (!function) {
     *err = -1;
     return NULL;
@@ -875,13 +1044,13 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
   //:|：
   if (tokens->tokens[*index].type != TOK_OPR_COLON) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     free(function);
     return NULL;
   }
   if ((*index + 1) >= tokens->count) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     free(function);
     return NULL;
   }
@@ -889,12 +1058,12 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
   // ID
   if (tokens->tokens[*index].type != TOK_ID) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     free(function);
     return NULL;
   }
-  function->name = (wchar_t*)calloc(wcslen(tokens->tokens[*index].value) + 1,
-                                    sizeof(wchar_t));
+  function->name = (wchar_t *)calloc(wcslen(tokens->tokens[*index].value) + 1,
+                                     sizeof(wchar_t));
   if (!function->name) {
     *err = -1;
     free(function);
@@ -907,7 +1076,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
 
   if ((*index + 1) >= tokens->count) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     free(function->name);
     free(function);
     return NULL;
@@ -916,14 +1085,14 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
   // (
   if (tokens->tokens[*index].type != TOK_OPR_LQUOTE) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     free(function->name);
     free(function);
     return NULL;
   }
   if ((*index + 1) >= tokens->count) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     free(function->name);
     free(function);
     return NULL;
@@ -940,7 +1109,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
   // 分析返回类型或复制函数体
   if ((*index + 1) >= tokens->count) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     // 释放已分配的内存
     for (int i = 0; i < function->param_count; i++) {
       free(function->params[i].name);
@@ -956,7 +1125,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
     // ,
     if ((*index + 1) >= tokens->count) {
       setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       // 释放已分配的内存
       for (int i = 0; i < function->param_count; i++) {
         free(function->params[i].name);
@@ -972,7 +1141,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
       // 冒号
       if ((*index + 1) >= tokens->count) {
         setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-        *err = 255;  // 语法错误
+        *err = 255; // 语法错误
         // 释放已分配的内存
         for (int i = 0; i < function->param_count; i++) {
           free(function->params[i].name);
@@ -985,7 +1154,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
       (*index)++;
       if (tokens->tokens[*index].type != TOK_OPR_COLON) {
         setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-        *err = 255;  // 语法错误
+        *err = 255; // 语法错误
         // 释放已分配的内存
         for (int i = 0; i < function->param_count; i++) {
           free(function->params[i].name);
@@ -998,7 +1167,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
       // 数据类型
       if ((*index + 1) >= tokens->count) {
         setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-        *err = 255;  // 语法错误
+        *err = 255; // 语法错误
         // 释放已分配的内存
         for (int i = 0; i < function->param_count; i++) {
           free(function->params[i].name);
@@ -1011,7 +1180,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
       (*index)++;
       if (tokens->tokens[*index].type != TOK_ID) {
         setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-        *err = 255;  // 语法错误
+        *err = 255; // 语法错误
         // 释放已分配的内存
         for (int i = 0; i < function->param_count; i++) {
           free(function->params[i].name);
@@ -1024,11 +1193,21 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
 #ifdef HX_DEBUG
       log(L"解析到函数返回类型：%ls", tokens->tokens[*index].value);
 #endif
-      function->return_type = parseDataType(tokens->tokens[*index].value);
+      function->return_type = parseDataType(tokens, index, tokens->count, err);
+      if (*err) {
+        // 释放已分配的内存
+        for (int i = 0; i < function->param_count; i++) {
+          free(function->params[i].name);
+        }
+        free(function->params);
+        free(function->name);
+        free(function);
+        return NULL;
+      }
       function->isReturnTypeKnown = true;
       if ((*index + 1) >= tokens->count) {
         setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-        *err = 255;  // 语法错误
+        *err = 255; // 语法错误
         // 释放已分配的内存
         for (int i = 0; i < function->param_count; i++) {
           free(function->params[i].name);
@@ -1045,7 +1224,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
       function->return_type.kind = IR_DT_VOID;
       if ((*index + 1) >= tokens->count) {
         setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-        *err = 255;  // 语法错误
+        *err = 255; // 语法错误
         // 释放已分配的内存
         for (int i = 0; i < function->param_count; i++) {
           free(function->params[i].name);
@@ -1058,7 +1237,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
       (*index)++;
     } else {
       setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       // 释放已分配的内存
       for (int i = 0; i < function->param_count; i++) {
         free(function->params[i].name);
@@ -1070,9 +1249,15 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
     }
   }
   // 函数体
+  if (tokens->tokens[*index].type == TOK_END) {
+    (*index)++;
+    function->body_token_count = 0;
+    function->body_tokens = NULL;
+    return function;
+  }
   if (tokens->tokens[*index].type != TOK_OPR_LBRACE) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     // 释放已分配的内存
     for (int i = 0; i < function->param_count; i++) {
       free(function->params[i].name);
@@ -1101,7 +1286,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
   if (brace_count != 0) {
     setError(ERR_HUAKUOHAO_NOT_CLOSE, tokens->tokens[*index].line,
              tokens->tokens[body_start_index].value);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     // 释放已分配的内存
     for (int i = 0; i < function->param_count; i++) {
       free(function->params[i].name);
@@ -1113,7 +1298,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
   }
   function->body_token_count = end - body_start_index + 1;
   function->body_tokens =
-      (Token*)calloc(function->body_token_count, sizeof(Token));
+      (Token *)calloc(function->body_token_count, sizeof(Token));
   if (!function->body_tokens) {
     *err = -1;
     // 释放已分配的内存
@@ -1134,13 +1319,15 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
 #endif
   return function;
 }
-static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
+// 函数定义::= function:标识符(参数列表)[:数据类型]->{函数体}
+static IR_Function *parseFunction_EN(Tokens *tokens, int *index, int *err) {
   if (!tokens || !index) {
-    if (err) *err = -1;
+    if (err)
+      *err = -1;
     return NULL;
   }
   if ((*index + 1) >= tokens->count) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
     return NULL;
   }
@@ -1148,27 +1335,27 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
   (*index)++;
   if (tokens->tokens[*index].type != TOK_OPR_COLON) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     return NULL;
   }
   if ((*index + 1) >= tokens->count) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     return NULL;
   }
   (*index)++;
   if (tokens->tokens[*index].type != TOK_ID) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     return NULL;
   }
-  IR_Function* function = (IR_Function*)calloc(1, sizeof(IR_Function));
+  IR_Function *function = (IR_Function *)calloc(1, sizeof(IR_Function));
   if (!function) {
     *err = -1;
     return NULL;
   }
-  function->name = (wchar_t*)calloc(wcslen(tokens->tokens[*index].value) + 1,
-                                    sizeof(wchar_t));
+  function->name = (wchar_t *)calloc(wcslen(tokens->tokens[*index].value) + 1,
+                                     sizeof(wchar_t));
   if (!function->name) {
     *err = -1;
     free(function);
@@ -1181,7 +1368,7 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
   // 参数列表
   if ((*index + 1) >= tokens->count) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     free(function->name);
     free(function);
     return NULL;
@@ -1189,14 +1376,14 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
   (*index)++;
   if (tokens->tokens[*index].type != TOK_OPR_LQUOTE) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     free(function->name);
     free(function);
     return NULL;
   }
   if ((*index + 1) >= tokens->count) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     free(function->name);
     free(function);
     return NULL;
@@ -1210,10 +1397,13 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
     return NULL;
   }
   function->param_count = param_count;
+#ifdef HX_DEBUG
+  log(L"解析到函数体");
+#endif
   // 返回类型或函数体
   if ((*index + 1) >= tokens->count) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     // 释放已分配的内存
     for (int i = 0; i < function->param_count; i++) {
       free(function->params[i].name);
@@ -1225,11 +1415,11 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
   }
   (*index)++;
   function->isReturnTypeKnown = false;
-  if (tokens->tokens[*index].type == TOK_OPR_POINT) {
-    // ->
+  if (tokens->tokens[*index].type == TOK_OPR_COLON) {
+    // :
     if ((*index + 1) >= tokens->count) {
       setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       // 释放已分配的内存
       for (int i = 0; i < function->param_count; i++) {
         free(function->params[i].name);
@@ -1243,7 +1433,7 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
     // 数据类型
     if (tokens->tokens[*index].type != TOK_ID) {
       setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       // 释放已分配的内存
       for (int i = 0; i < function->param_count; i++) {
         free(function->params[i].name);
@@ -1256,11 +1446,21 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
 #ifdef HX_DEBUG
     log(L"解析到函数返回类型：%ls", tokens->tokens[*index].value);
 #endif
-    function->return_type = parseDataType(tokens->tokens[*index].value);
+    function->return_type = parseDataType(tokens, index, tokens->count, err);
+    if (*err) {
+      // 释放已分配的内存
+      for (int i = 0; i < function->param_count; i++) {
+        free(function->params[i].name);
+      }
+      free(function->params);
+      free(function->name);
+      free(function);
+      return NULL;
+    }
     function->isReturnTypeKnown = true;
     if ((*index + 1) >= tokens->count) {
       setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       // 释放已分配的内存
       for (int i = 0; i < function->param_count; i++) {
         free(function->params[i].name);
@@ -1272,10 +1472,43 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
     }
     (*index)++;
   }
-  // 函数体
+  // 函数体 | 声明
+  if (tokens->tokens[*index].type == TOK_END) {
+    // 函数声明，无函数体
+    (*index)++;
+    function->body_token_count = 0;
+    function->body_tokens = NULL;
+    return function;
+  }
+  // ->
+  if (tokens->tokens[*index].type != TOK_OPR_POINT) {
+    setError(ERR_FUN, tokens->tokens[*index].line, NULL);
+    *err = 255; // 语法错误
+    // 释放已分配的内存
+    for (int i = 0; i < function->param_count; i++) {
+      free(function->params[i].name);
+    }
+    free(function->params);
+    free(function->name);
+    free(function);
+    return NULL;
+  }
+  if (*index + 1 >= tokens->count) {
+    setError(ERR_FUN, tokens->tokens[*index].line, NULL);
+    *err = 255; // 语法错误
+    // 释放已分配的内存
+    for (int i = 0; i < function->param_count; i++) {
+      free(function->params[i].name);
+    }
+    free(function->params);
+    free(function->name);
+    free(function);
+    return NULL;
+  }
+  (*index)++;
   if (tokens->tokens[*index].type != TOK_OPR_LBRACE) {
     setError(ERR_FUN, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     // 释放已分配的内存
     for (int i = 0; i < function->param_count; i++) {
       free(function->params[i].name);
@@ -1304,7 +1537,7 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
   if (brace_count != 0) {
     setError(ERR_HUAKUOHAO_NOT_CLOSE, tokens->tokens[*index].line,
              tokens->tokens[body_start_index].value);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     // 释放已分配的内存
     for (int i = 0; i < function->param_count; i++) {
       free(function->params[i].name);
@@ -1316,7 +1549,7 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
   }
   function->body_token_count = end - body_start_index + 1;
   function->body_tokens =
-      (Token*)calloc(function->body_token_count, sizeof(Token));
+      (Token *)calloc(function->body_token_count, sizeof(Token));
   if (!function->body_tokens) {
     *err = -1;
     // 释放已分配的内存
@@ -1341,12 +1574,13 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
 // 定义函数::= fun:标识符(参数列表)->数据类型 { 函数体 }
 // 定义函数::= 定义函数:标识符(参数列表)
 // [，它的返回类型是：数据类型]|[，它没有返回类型] { 函数体 }
-IR_Function* parseFunction(Tokens* tokens, int* index, int* err) {
+IR_Function *parseFunction(Tokens *tokens, int *index, int *err) {
   if (!tokens || !index) {
-    if (err) *err = -1;
+    if (err)
+      *err = -1;
     return NULL;
   }
-  IR_Function* function = NULL;
+  IR_Function *function = NULL;
   if (wcscmp(tokens->tokens[*index].value, L"fun") == 0) {
     function = parseFunction_EN(tokens, index, err);
     if (*err != 0) {
@@ -1358,7 +1592,7 @@ IR_Function* parseFunction(Tokens* tokens, int* index, int* err) {
       return NULL;
     }
   } else {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     return NULL;
   }
 
@@ -1368,8 +1602,9 @@ IR_Function* parseFunction(Tokens* tokens, int* index, int* err) {
  * @param function 要显示信息的函数
  */
 #ifdef HX_DEBUG
-void showFunctionInfo(IR_Function* function) {
-  if (!function) return;
+void showFunctionInfo(IR_Function *function) {
+  if (!function)
+    return;
   initLocale();
   fwprintf(logStream, L"函数名: %ls\n", function->name);
   fwprintf(logStream, L"是否已知返回类型: %ls\n",
@@ -1377,28 +1612,58 @@ void showFunctionInfo(IR_Function* function) {
   if (function->isReturnTypeKnown) {
     fwprintf(logStream, L"返回类型: ");
     switch (function->return_type.kind) {
-      case IR_DT_INT:
-        fwprintf(logStream, L"int\n");
-        break;
-      case IR_DT_FLOAT:
-        fwprintf(logStream, L"float\n");
-        break;
-      case IR_DT_STRING:
-        fwprintf(logStream, L"string\n");
-        break;
-      case IR_DT_CHAR:
-        fwprintf(logStream, L"char\n");
-        break;
-      case IR_DT_BOOL:
-        fwprintf(logStream, L"bool\n");
-        break;
-      case IR_DT_VOID:
-        fwprintf(logStream, L"void\n");
-        break;
-      case IR_DT_CUSTOM:
-        fwprintf(logStream, L"custom(%ls)\n",
-                 function->return_type.custom_type_name);
-        break;
+    case IR_DT_INT:
+      fwprintf(logStream, L"int\n");
+      break;
+    case IR_DT_FLOAT:
+      fwprintf(logStream, L"float\n");
+      break;
+    case IR_DT_STRING:
+      fwprintf(logStream, L"string\n");
+      break;
+    case IR_DT_CHAR:
+      fwprintf(logStream, L"char\n");
+      break;
+    case IR_DT_BOOL:
+      fwprintf(logStream, L"bool\n");
+      break;
+    case IR_DT_VOID:
+      fwprintf(logStream, L"void\n");
+      break;
+    case IR_DT_CUSTOM:
+      fwprintf(logStream, L"custom(%ls)\n",
+               function->return_type.custom_type_name);
+      break;
+    case IR_DT_INT_ARR:
+      fwprintf(logStream, L"int array\n");
+      break;
+    case IR_DT_FLOAT_ARR:
+      fwprintf(logStream, L"float array\n");
+      break;
+    case IR_DT_STRING_ARR:
+      fwprintf(logStream, L"string array\n");
+      break;
+    case IR_DT_CHAR_ARR:
+      fwprintf(logStream, L"char array\n");
+      break;
+    case IR_DT_BOOL_ARR:
+      fwprintf(logStream, L"bool array\n");
+      break;
+    case IR_DT_INT_REFER:
+      fwprintf(logStream, L"int reference\n");
+      break;
+    case IR_DT_FLOAT_REFER:
+      fwprintf(logStream, L"float reference\n");
+      break;
+    case IR_DT_STRING_REFER:
+      fwprintf(logStream, L"string reference\n");
+      break;
+    case IR_DT_CHAR_REFER:
+      fwprintf(logStream, L"char reference\n");
+      break;
+    case IR_DT_BOOL_REFER:
+      fwprintf(logStream, L"bool reference\n");
+      break;
     }
   }
   fwprintf(logStream, L"参数个数: %d\n", function->param_count);
@@ -1406,6 +1671,76 @@ void showFunctionInfo(IR_Function* function) {
     fwprintf(logStream, L"\t参数%d: 名字=%ls, 类型=", i + 1,
              function->params[i].name);
     switch (function->params[i].type.kind) {
+    case IR_DT_INT:
+      fwprintf(logStream, L"int\n");
+      break;
+    case IR_DT_FLOAT:
+      fwprintf(logStream, L"float\n");
+      break;
+    case IR_DT_STRING:
+      fwprintf(logStream, L"string\n");
+      break;
+    case IR_DT_CHAR:
+      fwprintf(logStream, L"char\n");
+      break;
+    case IR_DT_BOOL:
+      fwprintf(logStream, L"bool\n");
+      break;
+    case IR_DT_VOID:
+      fwprintf(logStream, L"void\n");
+      break;
+    case IR_DT_CUSTOM:
+      fwprintf(logStream, L"custom(%ls)\n",
+               function->return_type.custom_type_name);
+      break;
+    case IR_DT_INT_ARR:
+      fwprintf(logStream, L"int array\n");
+      break;
+    case IR_DT_FLOAT_ARR:
+      fwprintf(logStream, L"float array\n");
+      break;
+    case IR_DT_STRING_ARR:
+      fwprintf(logStream, L"string array\n");
+      break;
+    case IR_DT_CHAR_ARR:
+      fwprintf(logStream, L"char array\n");
+      break;
+    case IR_DT_BOOL_ARR:
+      fwprintf(logStream, L"bool array\n");
+      break;
+    case IR_DT_INT_REFER:
+      fwprintf(logStream, L"int reference\n");
+      break;
+    case IR_DT_FLOAT_REFER:
+      fwprintf(logStream, L"float reference\n");
+      break;
+    case IR_DT_STRING_REFER:
+      fwprintf(logStream, L"string reference\n");
+      break;
+    case IR_DT_CHAR_REFER:
+      fwprintf(logStream, L"char reference\n");
+      break;
+    case IR_DT_BOOL_REFER:
+      fwprintf(logStream, L"bool reference\n");
+      break;
+    }
+  }
+}
+void showIRClassInfo(IR_Class *cls) {
+  if (!cls)
+    return;
+  initLocale();
+  fwprintf(logStream, L"类名: %ls\n", cls->name);
+  fwprintf(logStream, L"父类: %ls\n",
+           cls->parent_name ? cls->parent_name : L"无");
+  fwprintf(logStream, L"类体信息:\n");
+  fwprintf(logStream, L"\t私有成员个数: %d\n", cls->body.private_member_count);
+  for (int i = 0; i < cls->body.private_member_count; i++) {
+    IR_ClassMember *member = &cls->body.privateMembers[i];
+    if (member->type == IR_CM_VARIABLE) {
+      fwprintf(logStream, L"\t\t变量: 名字=%ls, 类型=",
+               member->data.variable->name);
+      switch (member->data.variable->type.kind) {
       case IR_DT_INT:
         fwprintf(logStream, L"int\n");
         break;
@@ -1426,47 +1761,8 @@ void showFunctionInfo(IR_Function* function) {
         break;
       case IR_DT_CUSTOM:
         fwprintf(logStream, L"custom(%ls)\n",
-                 function->params[i].type.custom_type_name);
+                 member->data.variable->type.custom_type_name);
         break;
-    }
-  }
-}
-void showIRClassInfo(IR_Class* cls) {
-  if (!cls) return;
-  initLocale();
-  fwprintf(logStream, L"类名: %ls\n", cls->name);
-  fwprintf(logStream, L"父类: %ls\n",
-           cls->parent_name ? cls->parent_name : L"无");
-  fwprintf(logStream, L"类体信息:\n");
-  fwprintf(logStream, L"\t私有成员个数: %d\n", cls->body.private_member_count);
-  for (int i = 0; i < cls->body.private_member_count; i++) {
-    IR_ClassMember* member = &cls->body.privateMembers[i];
-    if (member->type == IR_CM_VARIABLE) {
-      fwprintf(logStream, L"\t\t变量: 名字=%ls, 类型=",
-               member->data.variable->name);
-      switch (member->data.variable->type.kind) {
-        case IR_DT_INT:
-          fwprintf(logStream, L"int\n");
-          break;
-        case IR_DT_FLOAT:
-          fwprintf(logStream, L"float\n");
-          break;
-        case IR_DT_STRING:
-          fwprintf(logStream, L"string\n");
-          break;
-        case IR_DT_CHAR:
-          fwprintf(logStream, L"char\n");
-          break;
-        case IR_DT_BOOL:
-          fwprintf(logStream, L"bool\n");
-          break;
-        case IR_DT_VOID:
-          fwprintf(logStream, L"void\n");
-          break;
-        case IR_DT_CUSTOM:
-          fwprintf(logStream, L"custom(%ls)\n",
-                   member->data.variable->type.custom_type_name);
-          break;
       }
     } else if (member->type == IR_CM_FUNCTION) {
       fwprintf(logStream, L"\t\t函数:\n");
@@ -1475,33 +1771,33 @@ void showIRClassInfo(IR_Class* cls) {
   }
   fwprintf(logStream, L"\t公有成员个数: %d\n", cls->body.public_member_count);
   for (int i = 0; i < cls->body.public_member_count; i++) {
-    IR_ClassMember* member = &cls->body.publicMembers[i];
+    IR_ClassMember *member = &cls->body.publicMembers[i];
     if (member->type == IR_CM_VARIABLE) {
       fwprintf(logStream, L"\t\t变量: 名字=%ls, 类型=",
                member->data.variable->name);
       switch (member->data.variable->type.kind) {
-        case IR_DT_INT:
-          fwprintf(logStream, L"int\n");
-          break;
-        case IR_DT_FLOAT:
-          fwprintf(logStream, L"float\n");
-          break;
-        case IR_DT_STRING:
-          fwprintf(logStream, L"string\n");
-          break;
-        case IR_DT_CHAR:
-          fwprintf(logStream, L"char\n");
-          break;
-        case IR_DT_BOOL:
-          fwprintf(logStream, L"bool\n");
-          break;
-        case IR_DT_VOID:
-          fwprintf(logStream, L"void\n");
-          break;
-        case IR_DT_CUSTOM:
-          fwprintf(logStream, L"custom(%ls)\n",
-                   member->data.variable->type.custom_type_name);
-          break;
+      case IR_DT_INT:
+        fwprintf(logStream, L"int\n");
+        break;
+      case IR_DT_FLOAT:
+        fwprintf(logStream, L"float\n");
+        break;
+      case IR_DT_STRING:
+        fwprintf(logStream, L"string\n");
+        break;
+      case IR_DT_CHAR:
+        fwprintf(logStream, L"char\n");
+        break;
+      case IR_DT_BOOL:
+        fwprintf(logStream, L"bool\n");
+        break;
+      case IR_DT_VOID:
+        fwprintf(logStream, L"void\n");
+        break;
+      case IR_DT_CUSTOM:
+        fwprintf(logStream, L"custom(%ls)\n",
+                 member->data.variable->type.custom_type_name);
+        break;
       }
     } else if (member->type == IR_CM_FUNCTION) {
       fwprintf(logStream, L"\t\t函数:\n");
@@ -1511,49 +1807,11 @@ void showIRClassInfo(IR_Class* cls) {
   fwprintf(logStream, L"\t受保护成员个数: %d\n",
            cls->body.protected_member_count);
   for (int i = 0; i < cls->body.protected_member_count; i++) {
-    IR_ClassMember* member = &cls->body.protectedMembers[i];
+    IR_ClassMember *member = &cls->body.protectedMembers[i];
     if (member->type == IR_CM_VARIABLE) {
       fwprintf(logStream, L"\t\t变量: 名字=%ls, 类型=",
                member->data.variable->name);
       switch (member->data.variable->type.kind) {
-        case IR_DT_INT:
-          fwprintf(logStream, L"int\n");
-          break;
-        case IR_DT_FLOAT:
-          fwprintf(logStream, L"float\n");
-          break;
-        case IR_DT_STRING:
-          fwprintf(logStream, L"string\n");
-          break;
-        case IR_DT_CHAR:
-          fwprintf(logStream, L"char\n");
-          break;
-        case IR_DT_BOOL:
-          fwprintf(logStream, L"bool\n");
-          break;
-        case IR_DT_VOID:
-          fwprintf(logStream, L"void\n");
-          break;
-        case IR_DT_CUSTOM:
-          fwprintf(logStream, L"custom(%ls)\n",
-                   member->data.variable->type.custom_type_name);
-          break;
-      }
-    } else if (member->type == IR_CM_FUNCTION) {
-      fwprintf(logStream, L"\t\t函数:\n");
-      showFunctionInfo(member->data.function);
-    }
-  }
-}
-void showIRProgramInfo(IR_Program* program) {
-  if (!program) return;
-  initLocale();
-  fwprintf(logStream, L"======= 中间表示信息 =======\n");
-  fwprintf(logStream, L"全局变量个数: %d\n", program->global_variable_count);
-  for (int i = 0; i < program->global_variable_count; i++) {
-    IR_Variable* var = program->global_variables[i];
-    fwprintf(logStream, L"\t变量%d: 名字=%ls, 类型=", i + 1, var->name);
-    switch (var->type.kind) {
       case IR_DT_INT:
         fwprintf(logStream, L"int\n");
         break;
@@ -1573,8 +1831,47 @@ void showIRProgramInfo(IR_Program* program) {
         fwprintf(logStream, L"void\n");
         break;
       case IR_DT_CUSTOM:
-        fwprintf(logStream, L"custom(%ls)\n", var->type.custom_type_name);
+        fwprintf(logStream, L"custom(%ls)\n",
+                 member->data.variable->type.custom_type_name);
         break;
+      }
+    } else if (member->type == IR_CM_FUNCTION) {
+      fwprintf(logStream, L"\t\t函数:\n");
+      showFunctionInfo(member->data.function);
+    }
+  }
+}
+void showIRProgramInfo(IR_Program *program) {
+  if (!program)
+    return;
+  initLocale();
+  fwprintf(logStream, L"======= 中间表示信息 =======\n");
+  fwprintf(logStream, L"全局变量个数: %d\n", program->global_variable_count);
+  for (int i = 0; i < program->global_variable_count; i++) {
+    IR_Variable *var = program->global_variables[i];
+    fwprintf(logStream, L"\t变量%d: 名字=%ls, 类型=", i + 1, var->name);
+    switch (var->type.kind) {
+    case IR_DT_INT:
+      fwprintf(logStream, L"int\n");
+      break;
+    case IR_DT_FLOAT:
+      fwprintf(logStream, L"float\n");
+      break;
+    case IR_DT_STRING:
+      fwprintf(logStream, L"string\n");
+      break;
+    case IR_DT_CHAR:
+      fwprintf(logStream, L"char\n");
+      break;
+    case IR_DT_BOOL:
+      fwprintf(logStream, L"bool\n");
+      break;
+    case IR_DT_VOID:
+      fwprintf(logStream, L"void\n");
+      break;
+    case IR_DT_CUSTOM:
+      fwprintf(logStream, L"custom(%ls)\n", var->type.custom_type_name);
+      break;
     }
   }
   fwprintf(logStream, L"函数个数: %d\n", program->function_count);
@@ -1598,10 +1895,11 @@ void showIRProgramInfo(IR_Program* program) {
  * @param err 错误码输出指针
  * @return 解析得到的类体结构体(不是指针)
  */
-static IR_ClassBody parseClassBody(Tokens* tokens, int start_index,
-                                   int end_index, int* err) {
+static IR_ClassBody parseClassBody(Tokens *tokens, int start_index,
+                                   int end_index, int *err) {
   if (!tokens || err == NULL) {
-    if (err) *err = -1;
+    if (err)
+      *err = -1;
     IR_ClassBody body = {0};
     return body;
   }
@@ -1665,13 +1963,13 @@ static IR_ClassBody parseClassBody(Tokens* tokens, int start_index,
     }
     if (wcscmp(tokens->tokens[index].value, L"定义函数") == 0 ||
         wcscmp(tokens->tokens[index].value, L"fun") == 0) {
-      IR_Function* func = parseFunction(tokens, &index, err);
+      IR_Function *func = parseFunction(tokens, &index, err);
       if (func == NULL || *err != 0) {
         return body;
       }
       if (state == PARSE_PRIVATE_MEMBERS) {
         body.private_member_count++;
-        body.privateMembers = (IR_ClassMember*)realloc(
+        body.privateMembers = (IR_ClassMember *)realloc(
             body.privateMembers,
             sizeof(IR_ClassMember) * body.private_member_count);
         if (!body.privateMembers) {
@@ -1683,7 +1981,7 @@ static IR_ClassBody parseClassBody(Tokens* tokens, int start_index,
         body.privateMembers[body.private_member_count - 1].data.function = func;
       } else if (state == PARSE_PUBLIC_MEMBERS) {
         body.public_member_count++;
-        body.publicMembers = (IR_ClassMember*)realloc(
+        body.publicMembers = (IR_ClassMember *)realloc(
             body.publicMembers,
             sizeof(IR_ClassMember) * body.public_member_count);
         if (!body.publicMembers) {
@@ -1694,7 +1992,7 @@ static IR_ClassBody parseClassBody(Tokens* tokens, int start_index,
         body.publicMembers[body.public_member_count - 1].data.function = func;
       } else if (state == PARSE_PROTECTED_MEMBERS) {
         body.protected_member_count++;
-        body.protectedMembers = (IR_ClassMember*)realloc(
+        body.protectedMembers = (IR_ClassMember *)realloc(
             body.protectedMembers,
             sizeof(IR_ClassMember) * body.protected_member_count);
         if (!body.protectedMembers) {
@@ -1722,12 +2020,12 @@ static IR_ClassBody parseClassBody(Tokens* tokens, int start_index,
                wcscmp(tokens->tokens[index].value, L"定义变量") == 0 ||
                wcscmp(tokens->tokens[index].value, L"con") == 0 ||
                wcscmp(tokens->tokens[index].value, L"定义常量") == 0) {
-      IR_Variable* var = parseGlobalOrClassVariable(tokens, &index, err);
+      IR_Variable *var = parseGlobalOrClassVariable(tokens, &index, err);
       if (var == NULL || *err != 0) {
         return body;
       }
       body.private_member_count++;
-      body.privateMembers = (IR_ClassMember*)realloc(
+      body.privateMembers = (IR_ClassMember *)realloc(
           body.privateMembers,
           sizeof(IR_ClassMember) * body.private_member_count);
       body.privateMembers[body.private_member_count - 1].type = IR_CM_VARIABLE;
@@ -1755,41 +2053,42 @@ static IR_ClassBody parseClassBody(Tokens* tokens, int start_index,
  * @param err 错误码输出指针
  * @return 解析得到的类结构体指针
  */
-static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
+static IR_Class *parseClass_EN(Tokens *tokens, int *index, int *err) {
   if (!tokens || !index || err == NULL) {
-    if (err) *err = -1;
+    if (err)
+      *err = -1;
     return NULL;
   }
   if ((*index + 1) >= tokens->count) {
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
     return NULL;
   }
   (*index)++;
   if (tokens->tokens[*index].type != TOK_OPR_COLON) {
     setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     return NULL;
   }
   if ((*index + 1) >= tokens->count) {
     setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     return NULL;
   }
   (*index)++;
   // 类名
   if (tokens->tokens[*index].type != TOK_ID) {
     setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     return NULL;
   }
-  IR_Class* class = (IR_Class*)calloc(1, sizeof(IR_Class));
+  IR_Class *class = (IR_Class *)calloc(1, sizeof(IR_Class));
   if (!class) {
     *err = -1;
     return NULL;
   }
-  class->name = (wchar_t*)calloc(wcslen(tokens->tokens[*index].value) + 1,
-                                 sizeof(wchar_t));
+  class->name = (wchar_t *)calloc(wcslen(tokens->tokens[*index].value) + 1,
+                                  sizeof(wchar_t));
   if (!class->name) {
     *err = -1;
     free(class);
@@ -1802,7 +2101,7 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
   // 继承或类体
   if ((*index + 1) >= tokens->count) {
     setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
+    *err = 255; // 语法错误
     free(class->name);
     free(class);
     return NULL;
@@ -1812,7 +2111,7 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
     //,
     if ((*index + 1) >= tokens->count) {
       setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       free(class->name);
       free(class);
       return NULL;
@@ -1821,14 +2120,14 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
     // parent:
     if (wcscmp(tokens->tokens[*index].value, L"parent") != 0) {
       setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       free(class->name);
       free(class);
       return NULL;
     }
     if ((*index + 1) >= tokens->count) {
       setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       free(class->name);
       free(class);
       return NULL;
@@ -1836,14 +2135,14 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
     (*index)++;
     if (tokens->tokens[*index].type != TOK_OPR_COLON) {
       setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       free(class->name);
       free(class);
       return NULL;
     }
     if ((*index + 1) >= tokens->count) {
       setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       free(class->name);
       free(class);
       return NULL;
@@ -1852,12 +2151,12 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
     // 父类名
     if (tokens->tokens[*index].type != TOK_ID) {
       setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       free(class->name);
       free(class);
       return NULL;
     }
-    class->parent_name = (wchar_t*)calloc(
+    class->parent_name = (wchar_t *)calloc(
         wcslen(tokens->tokens[*index].value) + 1, sizeof(wchar_t));
     if (!class->parent_name) {
       *err = -1;
@@ -1871,7 +2170,7 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
 #endif
     if ((*index + 1) >= tokens->count) {
       setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-      *err = 255;  // 语法错误
+      *err = 255; // 语法错误
       free(class->parent_name);
       free(class->name);
       free(class);
@@ -1882,8 +2181,9 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
   // 类体
   if (tokens->tokens[*index].type != TOK_OPR_LBRACE) {
     setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-    *err = 255;  // 语法错误
-    if (class->parent_name) free(class->parent_name);
+    *err = 255; // 语法错误
+    if (class->parent_name)
+      free(class->parent_name);
     free(class->name);
     free(class);
     return NULL;
@@ -1906,8 +2206,9 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
   if (brace_count != 0) {
     setError(ERR_HUAKUOHAO_NOT_CLOSE, tokens->tokens[*index].line,
              tokens->tokens[body_start_index].value);
-    *err = 255;  // 语法错误
-    if (class->parent_name) free(class->parent_name);
+    *err = 255; // 语法错误
+    if (class->parent_name)
+      free(class->parent_name);
     free(class->name);
     free(class);
     return NULL;
@@ -1915,7 +2216,8 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
   // 解析类体
   class->body = parseClassBody(tokens, body_start_index + 1, *index - 1, err);
   if (*err != 0) {
-    if (class->parent_name) free(class->parent_name);
+    if (class->parent_name)
+      free(class->parent_name);
     free(class->name);
     free(class);
     return NULL;
@@ -1923,22 +2225,105 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
   (*index)++;
   return class;
 }
-IR_Class* parseClass(Tokens* tokens, int* index, int* err) {
+IR_Class *parseClass(Tokens *tokens, int *index, int *err) {
   if (!tokens || !index || err == NULL) {
-    if (err) *err = -1;
+    if (err)
+      *err = -1;
     return NULL;
   }
-  IR_Class* class = NULL;
+  IR_Class *class = NULL;
   if (wcscmp(tokens->tokens[*index].value, L"class") == 0) {
 #ifdef HX_DEBUG
     log(L"开始解析类定义(英文)...");
 #endif
+    int line = tokens->tokens[*index].line;
     class = parseClass_EN(tokens, index, err);
     if (*err != 0 || class == NULL) {
       return NULL;
     }
+    class->line = line;
   } else if (wcscmp(tokens->tokens[*index].value, L"定义类") == 0) {
   }
   return class;
+}
+static int getDataSize(IR_DataType type) {
+  switch (type.kind) {
+  case IR_DT_INT:
+    return sizeof(int32_t);
+  case IR_DT_FLOAT:
+    return sizeof(float);
+  case IR_DT_CHAR:
+    return sizeof(uint16_t);
+  case IR_DT_BOOL:
+    return 1;
+  case IR_DT_STRING:
+    return sizeof(uint16_t *); // 用uint16_t规范wchar_t*指针大小
+  }
+}
+IR_Class *getClassByName(const wchar_t *name, IR_Program *currentIRProgram) {
+  if (!name || !currentIRProgram)
+    return NULL;
+  for (int i = 0; i < currentIRProgram->class_count; i++) {
+    if (wcscmp(currentIRProgram->classes[i]->name, name) == 0) {
+      return currentIRProgram->classes[i];
+    }
+  }
+  return NULL;
+}
+int getClassSize(IR_Class *cls, IR_Program *currentIRProgram) {
+  if (!cls)
+    return 0;
+  int size = 0;
+  // 计算私有成员变量大小
+  for (int i = 0; i < cls->body.private_member_count; i++) {
+    IR_ClassMember *member = &cls->body.privateMembers[i];
+    if (member->type == IR_CM_VARIABLE) {
+      if (member->data.variable->type.kind == IR_DT_CUSTOM) {
+        // 自定义类型，递归计算大小
+        IR_Class *custom_cls = getClassByName(
+            member->data.variable->type.custom_type_name, currentIRProgram);
+        if (custom_cls) {
+          size += getClassSize(custom_cls, currentIRProgram);
+        }
+      } else {
+        size += getDataSize(member->data.variable->type);
+      }
+    }
+    // 计算公有成员变量大小
+    for (int i = 0; i < cls->body.public_member_count; i++) {
+      IR_ClassMember *member = &cls->body.publicMembers[i];
+      if (member->type == IR_CM_VARIABLE) {
+        if (member->data.variable->type.kind == IR_DT_CUSTOM) {
+          // 自定义类型，递归计算大小
+          IR_Class *custom_cls = getClassByName(
+              member->data.variable->type.custom_type_name, currentIRProgram);
+          if (custom_cls) {
+            size += getClassSize(custom_cls, currentIRProgram);
+          }
+        } else {
+          size += getDataSize(member->data.variable->type);
+        }
+      }
+    }
+    // 计算受保护成员变量大小
+    for (int i = 0; i < cls->body.protected_member_count; i++) {
+      IR_ClassMember *member = &cls->body.protectedMembers[i];
+      if (member->type == IR_CM_VARIABLE) {
+        if (member->type == IR_CM_VARIABLE) {
+          if (member->data.variable->type.kind == IR_DT_CUSTOM) {
+            // 自定义类型，递归计算大小
+            IR_Class *custom_cls = getClassByName(
+                member->data.variable->type.custom_type_name, currentIRProgram);
+            if (custom_cls) {
+              size += getClassSize(custom_cls, currentIRProgram);
+            }
+          } else {
+            size += getDataSize(member->data.variable->type);
+          }
+        }
+      }
+    }
+    return size;
+  }
 }
 #endif

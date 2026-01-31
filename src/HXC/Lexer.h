@@ -39,6 +39,7 @@ typedef enum HxTokenType {
   TOK_OPR_DOT,       // .
   TOK_OPR_COLON,     // :
   TOK_OPR_POINT,     // ->
+  TOK_OPR_REFER, // &
   TOK_END,           // 终结符 (;|；|。)
 } HxTokenType;
 typedef struct Token {
@@ -231,6 +232,12 @@ Tokens* lex(wchar_t* src, int* err) {
             tokens->tokens[token_index].type = TOK_OPR_DEC;
           } else if ((src[index_src] == L'-' && src[index_src + 1] == L'>')) {
             tokens->tokens[token_index].type = TOK_OPR_POINT;
+          } else if((src[index_src] == L'＆' && src[index_src + 1] == L'＆')) {
+            tokens->tokens[token_index].type = TOK_OPR_AND;
+          } else if((src[index_src] == L'|' && src[index_src + 1] == L'|')) {
+            tokens->tokens[token_index].type = TOK_OPR_OR;
+          } else if((src[index_src] == L'&' && src[index_src + 1] == L'&')) {
+            tokens->tokens[token_index].type = TOK_OPR_AND;
           }
           tokens->tokens[token_index].value =
               (wchar_t*)calloc(3, sizeof(wchar_t));
@@ -257,7 +264,7 @@ Tokens* lex(wchar_t* src, int* err) {
           } else if (src[index_src] == L'<') {
             tokens->tokens[token_index].type = TOK_OPR_LT;
           } else if (src[index_src] == L'&') {
-            tokens->tokens[token_index].type = TOK_OPR_AND;
+            tokens->tokens[token_index].type = TOK_OPR_REFER;
           } else if (src[index_src] == L'|') {
             tokens->tokens[token_index].type = TOK_OPR_OR;
           } else if (src[index_src] == L'!' || src[index_src] == L'！') {
@@ -284,6 +291,12 @@ Tokens* lex(wchar_t* src, int* err) {
             tokens->tokens[token_index].type = TOK_OPR_LTE;
           } else if (src[index_src] == L'≥') {
             tokens->tokens[token_index].type = TOK_OPR_GTE;
+          } else if(src[index_src] == L'≠') {
+            tokens->tokens[token_index].type = TOK_OPR_NEQU;
+          } else if(src[index_src] == L'＆' || src[index_src] == L'&') {
+            tokens->tokens[token_index].type = TOK_OPR_REFER;
+          } else {
+            tokens->tokens[token_index].type = TOK_NIL;
           }
           tokens->tokens[token_index].value =
               (wchar_t*)calloc(2, sizeof(wchar_t));
