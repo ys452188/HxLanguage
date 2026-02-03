@@ -27,7 +27,10 @@ typedef enum ErrorType {
   ERR_CANNOT_FIND_SYMBOL,
   ERR_EXP,
   ERR_OUT_OF_VALUE,  // 数值溢出
-  ERR_CLASS_REPEATED // 类重复定义
+  ERR_CLASS_REPEATED, // 类重复定义
+  ERR_RET,                 // 返回值错误 （语法错误）
+  ERR_RET_VAL,             // 返回值错误
+  ERR_UNKNOWN_TYPE         // 未知类型
 } ErrorType;
 
 void initLocale(void) {
@@ -221,6 +224,24 @@ void setError(ErrorType e, int errorLine, wchar_t* errCode) {
     case ERR_CLASS_REPEATED: {
       swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
                L"\33[31m[ERR]类重复定义！\33[0m(位于第%d行)\n", errorLine);
+      break;
+    }
+
+    case ERR_RET: {
+      swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
+               L"\33[31m[ERR]返回语句语法错误！\33[0m(位于第%d行)\n\33[36m[NOTE]\33[0m 返回::= ret:exp | 返回：exp\n", errorLine);
+      break;
+    }
+    case ERR_UNKNOWN_TYPE: {
+      swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
+               L"\33[31m[ERR]不兼容的类型！\33[0m(位于第%d行)\n",
+               errorLine, errCode ? errCode : L" ");
+      break;
+    }
+    case ERR_RET_VAL: {
+      swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
+               L"\33[31m[ERR]返回值错误！\33[0m(位于第%d行)\n",
+               errorLine);
       break;
     }
   }

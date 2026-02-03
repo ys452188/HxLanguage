@@ -31,14 +31,13 @@ typedef struct Param {
   char value[8];
 } Param;
 // 指令
-typedef struct instruction {
+typedef struct Instruction {
   Opcode opcode;
   Param params[3];
-} instruction;
+} Instruction;
 // 过程,用索引访问
 typedef struct Procedure {
-  uint16_t paramSize; // 参数数量
-  instruction* instructions;
+  Instruction* instructions;
   uint32_t stackSize;     // 栈大小
   uint32_t localVarSize;  // 局部变量数量
   uint32_t instructionSize;
@@ -58,7 +57,7 @@ typedef struct Constant {
     float float_value;
     wchar_t char_value;
     bool bool_value;
-    wchar_t* string_value;
+    uint16_t* string_value;
   } value;
   uint16_t size;
 } Constant;

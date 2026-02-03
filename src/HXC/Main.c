@@ -17,6 +17,7 @@ FILE* errorStream = NULL;
 #include "IR.h"
 #include "Lexer.h"
 #include "Scanner.h"
+#include "Generator.h"
 
 int main(int argc, char* argv[]) {
   initLocale();
@@ -73,7 +74,7 @@ int main(int argc, char* argv[]) {
   IR_Program* program = NULL;
   int irError = 0;
   program = generateIR(tokens, &irError);
-  freeTokens(&tokens);
+  
   if (irError == 255) {
     fwprintf(errorStream, L"%ls\n", errorMessageBuffer);
     fwprintf(outputStream, L"\33[31m[ERR]\33[0m编译失败。\n");
@@ -87,7 +88,23 @@ int main(int argc, char* argv[]) {
   showIRProgramInfo(program);
 #endif
 
+  // 目标代码生成
+  fwprintf(outputStream, L"\33[34m[INFO]\33[0m正在生成目标代码\n");
+  int genError = 0;
+  ObjectCode* objCode = generateObjectCode(program, &genError);
+  if (genError == 255) {
+    fwprintf(errorStream, L"%ls\n", errorMessageBuffer);
+    freeIRProgram(&program);
+    fwprintf(outputStream, L"\33[31m[ERR]\33[0m编译失败。\n");
+    return 255;
+  } else if (genError == -1) {
+    fwprintf(errorStream, L"\33[31m[ERR]\33[0m内存分配失败！\n");
+    freeIRProgram(&program);
+    return -1;
+  }
+
   freeIRProgram(&program);
+  freeTokens(&tokens);
   end = clock();
   fwprintf(outputStream, L"\33[34m[INFO]\33[0m编译完成。共耗时%lfs\n",
            (double)(end - start) / CLOCKS_PER_SEC);
