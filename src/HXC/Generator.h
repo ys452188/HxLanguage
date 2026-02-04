@@ -20,6 +20,11 @@ typedef uint16_t wchar;
  * @return 生成的目标代码对象指针，发生错误时返回NULL
  */
 extern ObjectCode *generateObjectCode(IR_Program *program, int *err);
+static Instruction *generateInstructionsFromAST(Instruction *instructions,
+                                                int *inst_index, int *inst_size,
+                                                ASTNode *node,
+                                                ConstantPool *constantPool,
+                                                int *err);
 /*
  * 生成函数的目标代码
  * @param function: 中间表示的函数
@@ -66,9 +71,9 @@ static void listObjectCode_Proc(Procedure *proc) {
         memcpy(&v, ins.params[0].value, sizeof(int32_t));
         fwprintf(logStream, L" INT=%d", v);
       } else if (ins.params[0].type == PARAM_TYPE_FLOAT) {
-        float f;
-        memcpy(&f, ins.params[0].value, sizeof(float));
-        fwprintf(logStream, L" FLOAT=%f", f);
+        double d;
+        memcpy(&d, ins.params[0].value, sizeof(double));
+        fwprintf(logStream, L" FLOAT=%f", d);
       } else if (ins.params[0].type == PARAM_TYPE_CHAR) {
         wchar_t c;
         memcpy(&c, ins.params[0].value, sizeof(wchar_t));
@@ -231,7 +236,7 @@ Procedure *generateFunction(IR_Function *function, ConstantPool *constantPool,
     // 返回::= 返回:exp
     // PUSH ...
     // OP_RET
-    //wprintf(L"%ls\n", currentToken.value);
+    // wprintf(L"%ls\n", currentToken.value);
     if (wcscmp(currentToken.value, L"ret") == 0 ||
         wcscmp(currentToken.value, L"返回") == 0) {
 #ifdef HX_DEBUG
@@ -278,7 +283,7 @@ Procedure *generateFunction(IR_Function *function, ConstantPool *constantPool,
         return NULL;
       }
       index++; // 指向表达式起始位置
-      wprintf(L"%ls", function->body_tokens[index].value);
+      //wprintf(L"%ls", function->body_tokens[index].value);
       ASTNode *expNode =
           parseExpression(function->body_tokens, &index,
                           function->body_token_count, &localeSymbolTable, err);
@@ -286,8 +291,36 @@ Procedure *generateFunction(IR_Function *function, ConstantPool *constantPool,
         free(proc);
         return NULL;
       }
+      #ifdef HX_DEBUG
+      log(L"生成返回值表达式指令...\n");
+      #endif
+      // 生成表达式指令
+      int inst_index = proc->instructionSize;
+      int inst_size = proc->instructionSize; 
+      proc->instructions = generateInstructionsFromAST(
+          proc->instructions, &inst_index, &inst_size, expNode, constantPool,
+          err);
+      if (!proc->instructions || *err != 0) {
+        freeAST(expNode);
+        *err = -1;
+        return NULL;
+      }
+      proc->instructionSize = inst_index;
+      freeAST(expNode);
+      // 生成返回指令
+    proc->instructions = (Instruction *)realloc(
+      proc->instructions,
+      sizeof(Instruction) * (proc->instructionSize + 1));
+      if (!proc->instructions) {
+        *err = -1;
+        freeAST(expNode);
+        free(proc);
+        return NULL;
+      }
+      proc->instructions[proc->instructionSize].opcode = OP_RET;
+      proc->instructionSize++;
       index++;
-      if(function->body_tokens[index].type != TOK_END) {
+      if (function->body_tokens[index].type != TOK_END) {
         setError(ERR_RET, currentToken.line, NULL);
         *err = 255;
         freeAST(expNode);
@@ -298,5 +331,163 @@ Procedure *generateFunction(IR_Function *function, ConstantPool *constantPool,
     index++;
   }
   return proc;
+}
+
+
+
+Instruction *generateInstructionsFromAST(Instruction *instructions,
+                                         int *inst_index, int *inst_size,
+                                         ASTNode *node,
+                                         ConstantPool *constantPool, int *err) {
+  if (!inst_index || !node || !inst_size || !err || !constantPool) {
+    if (err)
+      *err = -1;
+    return NULL;
+  }
+  if (*inst_size <= *inst_index) {
+    instructions = (Instruction *)realloc(instructions, sizeof(Instruction) *
+                                                            (*inst_size + 1));
+    if (!instructions) {
+      *err = -1;
+      return NULL;
+    }
+    *inst_size += 1;
+    memset(&instructions[*inst_index], 0, sizeof(Instruction));
+  }
+  if (node->kind == NODE_VALUE) {
+    instructions[*inst_index].opcode = OP_LOAD_CONST;
+    // 设置参数
+    if (node->data.value.type.kind == IR_DT_INT) {
+      instructions[*inst_index].params[0].type = PARAM_TYPE_INT;
+      memcpy(instructions[*inst_index].params[0].value,
+        &(node->data.value.val.i), sizeof(int32_t));
+      instructions[*inst_index].params[0].size = sizeof(int32_t);
+      instructions[*inst_index].params[1].type = PARAM_TYPE_INT;
+
+
+    } else if (node->data.value.type.kind == IR_DT_FLOAT) {
+      instructions[*inst_index].params[0].type = PARAM_TYPE_FLOAT;
+      memcpy(instructions[*inst_index].params[0].value,
+        &(node->data.value.val.f), sizeof(double));
+      instructions[*inst_index].params[0].size = sizeof(double);
+      instructions[*inst_index].params[1].type = PARAM_TYPE_FLOAT;
+
+    } else if (node->data.value.type.kind == IR_DT_CHAR) {
+      instructions[*inst_index].params[0].type = PARAM_TYPE_CHAR;
+      memcpy(instructions[*inst_index].params[0].value,
+             &(node->data.value.val.c), sizeof(uint16_t));
+      instructions[*inst_index].params[0].size = sizeof(uint16_t);
+
+    } else if (node->data.value.type.kind == IR_DT_STRING) {
+      // 加入常量池
+      constantPool->constants = (Constant *)realloc(
+          constantPool->constants, sizeof(Constant) * (constantPool->size + 1));
+      if (!constantPool->constants) {
+        *err = -1;
+        free(instructions);
+        return NULL;
+      }
+      constantPool->constants[constantPool->size].type = CONST_STRING;
+      constantPool->constants[constantPool->size].value.string_value =
+          (uint16_t *)calloc(wcslen(node->data.value.val.s) + 1,
+                             sizeof(uint16_t));
+      if (!constantPool->constants[constantPool->size].value.string_value) {
+        *err = -1;
+        free(instructions);
+        return NULL;
+      }
+      for (int i = 0; i < wcslen(node->data.value.val.s); i++) {
+        constantPool->constants[constantPool->size].value.string_value[i] =
+            (uint16_t)node->data.value.val.s[i];
+      }
+      constantPool->constants[constantPool->size].size =
+          (uint16_t)wcslen(node->data.value.val.s) * sizeof(uint16_t);
+      constantPool->size += 1;
+      instructions[*inst_index].params[0].type = PARAM_TYPE_INDEX;
+      uint32_t strIndex = constantPool->size - 1;
+      memcpy(instructions[*inst_index].params[0].value, &(strIndex),
+             sizeof(uint32_t));
+      instructions[*inst_index].params[0].size = sizeof(uint32_t);
+    } else {
+      
+      *err = -1;
+      free(instructions);
+      return NULL;
+    }
+    (*inst_index)++;
+  } else if(node->kind == NODE_BINARY) {
+    // 生成左子树指令
+    instructions = generateInstructionsFromAST(instructions, inst_index,
+                                               inst_size, node->left,
+                                               constantPool, err);
+    if (*err != 0) {
+      free(instructions);
+      return NULL;
+    }
+    // 生成右子树指令
+    instructions = generateInstructionsFromAST(instructions, inst_index,
+                                               inst_size, node->right,
+                                               constantPool, err);
+    if (*err != 0) {
+      free(instructions);
+      return NULL;
+    }
+    // 生成二元运算指令
+    if (*inst_size <= *inst_index) {
+      instructions = (Instruction *)realloc(instructions, sizeof(Instruction) *
+                                                              (*inst_size + 1));
+      if (!instructions) {
+        *err = -1;
+        return NULL;
+      }
+      *inst_size += 1;
+      memset(&instructions[*inst_index], 0, sizeof(Instruction));
+    }
+    switch (node->data.binary.op) {
+    case 0: // ADD
+      instructions[*inst_index].opcode = OP_ADD;
+      break;
+    case 1: // SUB
+      instructions[*inst_index].opcode = OP_SUB;
+      break;
+    case 2: // MUL
+      instructions[*inst_index].opcode = OP_MUL;
+      break;
+    case 3: // DIV
+      instructions[*inst_index].opcode = OP_DIV;
+      break;
+    default:
+      *err = -1;
+      free(instructions);
+      return NULL;
+    }
+    (*inst_index)++;
+  } else if (node->kind == NODE_VAR) {
+    instructions[*inst_index].opcode = OP_LOAD_VAR;
+    instructions[*inst_index].params[0].type = PARAM_TYPE_INDEX;
+    memcpy(instructions[*inst_index].params[0].value,
+           &(node->data.var.index), sizeof(uint32_t));
+    instructions[*inst_index].params[0].size = sizeof(uint32_t);
+    switch (node->data.var.type.kind) {
+    case IR_DT_INT: 
+      instructions[*inst_index].params[1].type = PARAM_TYPE_INT;
+      break;
+    case IR_DT_FLOAT:
+      instructions[*inst_index].params[1].type = PARAM_TYPE_FLOAT;
+      break;
+    case IR_DT_CHAR:
+      instructions[*inst_index].params[1].type = PARAM_TYPE_CHAR;
+      break;
+    case IR_DT_STRING:
+      instructions[*inst_index].params[1].type = PARAM_TYPE_STRING;
+      break;
+    }
+    (*inst_index)++;
+  } else {
+    *err = -1;
+    free(instructions);
+    return NULL;
+  }
+  return instructions;
 }
 #endif

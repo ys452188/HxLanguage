@@ -6,9 +6,9 @@
 #include <wchar.h>
 typedef enum {
   OP_NOP,
-  OP_LOAD_CONST,  // 加载常量至栈顶
-  OP_LOAD_VAR,    // 加载变量至栈顶
-  OP_STORE_VAR,   // 将栈顶值存入变量
+  OP_LOAD_CONST, // 加载常量至栈顶 OP_LOAD_CONST <param_type> <param_value> | OP_LOAD_CONST <const_index>
+  OP_LOAD_VAR,   // 加载变量至栈顶
+  OP_STORE_VAR,  // 将栈顶值存入变量
   OP_ADD,
   OP_SUB,
   OP_MUL,
@@ -21,11 +21,12 @@ typedef enum {
 typedef struct Param {
   enum ParamType {
     PARAM_TYPE_INT,
-    PARAM_TYPE_FLOAT,
+    PARAM_TYPE_FLOAT,    //double
     PARAM_TYPE_CHAR,
     PARAM_TYPE_BOOL,
+    PARAM_TYPE_STRING, 
     PARAM_TYPE_ADDRESS,
-    PARAM_TYPE_INDEX
+    PARAM_TYPE_INDEX   //uint32_t 索引常量池或过程表
   } type;
   uint8_t size;
   char value[8];
@@ -37,43 +38,35 @@ typedef struct Instruction {
 } Instruction;
 // 过程,用索引访问
 typedef struct Procedure {
-  Instruction* instructions;
-  uint32_t stackSize;     // 栈大小
-  uint32_t localVarSize;  // 局部变量数量
+  Instruction *instructions;
+  uint32_t stackSize;    // 栈大小
+  uint32_t localVarSize; // 局部变量数量
   uint32_t instructionSize;
 } Procedure;
 //------------------------------------
 // 常量池
 typedef struct Constant {
   enum ConstantType {
-    CONST_INT,
-    CONST_FLOAT,
-    CONST_CHAR,
-    CONST_BOOL,
     CONST_STRING,
   } type;
   union {
-    int int_value;
-    float float_value;
-    wchar_t char_value;
-    bool bool_value;
-    uint16_t* string_value;
+    uint16_t *string_value;
   } value;
-  uint16_t size;
+  uint16_t size;  // 不是字符串长度
 } Constant;
 typedef struct ConstantPool {
   uint32_t size;
-  Constant* constants;
+  Constant *constants;
 } ConstantPool;
 //----------------------------------
 typedef struct ObjectCodeHeader {
-  char magic[4];  // 魔数 "HXOC"
+  char magic[4]; // 魔数 "HXOC"
 } ObjectCodeHeader;
 //--------------------------------------
 typedef struct ObjectCode {
   ObjectCodeHeader header;
   ConstantPool constantPool;
-  Procedure** procedures;
+  Procedure **procedures;
   uint32_t procedureSize;
 } ObjectCode;
 //--------------------------------------

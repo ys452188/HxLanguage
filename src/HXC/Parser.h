@@ -27,6 +27,7 @@ typedef struct ASTNode {
         double f;
         int32_t i;
         wchar_t *s;
+        uint16_t c;
       } val;
     } value;
     struct {
@@ -115,6 +116,9 @@ static ASTNode *parsePrimary(Token *tokens, int *index, int size,
     } else if (wcschr(curr->value, L'.')) {
       node->data.value.type.kind = IR_DT_FLOAT;
       node->data.value.val.f = wcstod(curr->value, NULL);
+    } else if (curr->mark==CH) {
+      node->data.value.type.kind = IR_DT_CHAR;
+      node->data.value.val.c = (uint16_t)(curr->value[0]);
     } else {
       node->data.value.type.kind = IR_DT_INT;
       node->data.value.val.i = (int32_t)wcstol(curr->value, NULL, 10);
