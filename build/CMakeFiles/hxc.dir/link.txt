@@ -1,0 +1,3 @@
+D:\CMake\bin\cmake.exe -E rm -f CMakeFiles\hxc.dir/objects.a
+D:\msys64\mingw64\bin\ar.exe qc CMakeFiles\hxc.dir/objects.a @CMakeFiles\hxc.dir\objects1.rsp
+D:\msys64\mingw64\bin\gcc.exe -g -Wl,--whole-archive CMakeFiles\hxc.dir/objects.a -Wl,--no-whole-archive -o product\hxc.exe -Wl,--out-implib,libhxc.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\hxc.dir\linkLibs.rsp

@@ -1,3 +1,6 @@
 fun:main(void) -> {
-    ret ：1*(1+114*2);
+    ret ：foo()+514;
+}
+fun:foo(void):int -> {
+	ret:114;
 }

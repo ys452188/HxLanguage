@@ -15,7 +15,7 @@ typedef enum {
   OP_DIV,
   OP_JMP,
   OP_JMP_CONDITION,
-  OP_CAL,
+  OP_CAL,        //CAL <proc_index>(u32) <param_count>(u32) 
   OP_RET,
 } Opcode;
 typedef struct Param {

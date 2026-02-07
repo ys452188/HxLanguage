@@ -1,0 +1,4 @@
+C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/hxc.dir
+C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/hxvm.dir
+C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/edit_cache.dir
+C:/Users/Administrator/Desktop/HxLanguage/build/CMakeFiles/rebuild_cache.dir
