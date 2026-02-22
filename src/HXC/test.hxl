@@ -1,6 +1,0 @@
-fun:main(void) -> {
-    ret ：foo()+514;
-}
-fun:foo(void):int -> {
-	ret:114;
-}

@@ -1,3 +1,0 @@
-fun:main(void) -> {
-    ret ：bar()+1;
-}

@@ -10,18 +10,18 @@ int isFunctionRepeatDefine(IR_Function* fun, IR_Function** table, int table_size
     for(int i = 0; i < table_size; i++) {
         if(!table[i]) continue;
         if(wcscmp(fun->name, table[i]->name) == 0) {
-            if(fun->param_count == table[i]->param_count) {
+            if(fun->paramCount == table[i]->paramCount) {
                 //参数个数相同，继续检查参数类型
                 bool allParamsMatch = true;
-                for(int j = 0; j < fun->param_count; j++) {
+                for(int j = 0; j < fun->paramCount; j++) {
                     if(fun->params[j].type.kind != table[i]->params[j].type.kind) {
                         allParamsMatch = false;
                         break;
                     } else {
                         if(fun->params[j].type.kind == IR_DT_CUSTOM) {
                             //自定义类型，继续检查名称
-                            if(wcscmp(fun->params[j].type.custom_type_name,
-                                      table[i]->params[j].type.custom_type_name) != 0) {
+                            if(wcscmp(fun->params[j].type.customTypeName,
+                                      table[i]->params[j].type.customTypeName) != 0) {
                                 allParamsMatch = false;
                                 break;
                             }
@@ -30,11 +30,11 @@ int isFunctionRepeatDefine(IR_Function* fun, IR_Function** table, int table_size
                 }
                 if(allParamsMatch) {
                     //检查是不是声明
-                    if(table[i]->body_tokens == NULL || table[i]->body_token_count == 0) {
+                    if(table[i]->bodyTokens == NULL || table[i]->body_token_count == 0) {
                         return i;
                     }
                     //函数重复定义
-                    setError(ERR_FUN_REPEATED, fun->body_tokens[0].line, fun->name);
+                    setError(ERR_FUN_REPEATED, fun->bodyTokens[0].line, fun->name);
                     return -255;
                 }
             }
