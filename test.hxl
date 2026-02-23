@@ -5,6 +5,5 @@ fun:main(void) -> {
 }
 定义函数:foo(无参数){
     __hx_write_string__ "Hello From funCall foo!\n"
-    foo();
-    返回: 1+2;
+    返回: 1+'\33';
 }

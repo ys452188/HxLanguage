@@ -39,7 +39,7 @@ typedef enum HxTokenType {
     TOK_OPR_DOT,       // .
     TOK_OPR_COLON,     // :
     TOK_OPR_POINT,     // ->
-    TOK_OPR_REFER, // &
+    TOK_OPR_REFER,     // &
     TOK_END,           // 终结符 (;|；|。)
 } HxTokenType;
 typedef struct Token {
@@ -64,8 +64,8 @@ wchar_t* keyword[] = {  // 关键字
 static inline wchar_t* escape(const wchar_t* src);
 static inline bool isKeyword(wchar_t* str);  // 判断是否是关键字
 static inline bool isOperator(wchar_t ch);   // 判断是否是操作符
-Tokens* lex(wchar_t* src, int* err);  // 词法分析
-void freeTokens(Tokens** tokens);     // 释放
+Tokens* lex(wchar_t* src, int* err);         // 词法分析
+void freeTokens(Tokens** tokens);            // 释放
 
 Tokens* lex(wchar_t* src, int* err) {
 #define MEM_FAIL \
@@ -134,6 +134,16 @@ Tokens* lex(wchar_t* src, int* err) {
             while (index_src < length_src) {
                 index_src++;
                 if (src[index_src] == L'\n') line++;
+                if (src[index_src] == L'\\') {
+                    if (index_src + 1 >= length_src) {
+                        wchar_t errCode[3] = {0};
+                        errCode[0] = src[start_index];
+                        if (start_index + 1 < length_src) errCode[1] = src[start_index + 1];
+                        setError(ERR_CH_NO_END, line, errCode);
+                        ERR;
+                    }
+                    index_src += 2;
+                }
                 if (src[index_src] == L'\'' || src[index_src] == L'‘' ||
                         src[index_src] == L'’') {
                     end_index = index_src;
@@ -157,6 +167,9 @@ Tokens* lex(wchar_t* src, int* err) {
             if (!(tokens->tokens[token_index].value)) MEM_FAIL;
             if (len != 0)
                 wcsncpy(tokens->tokens[token_index].value, &(src[start_index]), len);
+            wchar_t* escapedString = escape(tokens->tokens[token_index].value);
+            free(tokens->tokens[token_index].value);
+            tokens->tokens[token_index].value = escapedString;
             tokens->tokens[token_index].line = line;
 #ifdef HX_DEBUG
             log(L"已创建一个新的字符型Token");
@@ -171,14 +184,14 @@ Tokens* lex(wchar_t* src, int* err) {
                 index_src++;
                 if (src[index_src] == L'\n') line++;
                 if (src[index_src] == L'\\') {
-                    if(index_src+1 >= length_src) {
+                    if (index_src + 1 >= length_src) {
                         wchar_t errCode[3] = {0};
                         errCode[0] = src[start_index];
                         if (start_index + 1 < length_src) errCode[1] = src[start_index + 1];
                         setError(ERR_STR_NO_END, line, errCode);
                         ERR;
                     }
-                    index_src+=2;
+                    index_src += 2;
                 }
                 if (src[index_src] == L'\"' || src[index_src] == L'“' ||
                         src[index_src] == L'”') {
@@ -246,11 +259,11 @@ Tokens* lex(wchar_t* src, int* err) {
                         tokens->tokens[token_index].type = TOK_OPR_DEC;
                     } else if ((src[index_src] == L'-' && src[index_src + 1] == L'>')) {
                         tokens->tokens[token_index].type = TOK_OPR_POINT;
-                    } else if((src[index_src] == L'＆' && src[index_src + 1] == L'＆')) {
+                    } else if ((src[index_src] == L'＆' && src[index_src + 1] == L'＆')) {
                         tokens->tokens[token_index].type = TOK_OPR_AND;
-                    } else if((src[index_src] == L'|' && src[index_src + 1] == L'|')) {
+                    } else if ((src[index_src] == L'|' && src[index_src + 1] == L'|')) {
                         tokens->tokens[token_index].type = TOK_OPR_OR;
-                    } else if((src[index_src] == L'&' && src[index_src + 1] == L'&')) {
+                    } else if ((src[index_src] == L'&' && src[index_src + 1] == L'&')) {
                         tokens->tokens[token_index].type = TOK_OPR_AND;
                     }
                     tokens->tokens[token_index].value =
@@ -305,9 +318,9 @@ Tokens* lex(wchar_t* src, int* err) {
                         tokens->tokens[token_index].type = TOK_OPR_LTE;
                     } else if (src[index_src] == L'≥') {
                         tokens->tokens[token_index].type = TOK_OPR_GTE;
-                    } else if(src[index_src] == L'≠') {
+                    } else if (src[index_src] == L'≠') {
                         tokens->tokens[token_index].type = TOK_OPR_NEQU;
-                    } else if(src[index_src] == L'＆' || src[index_src] == L'&') {
+                    } else if (src[index_src] == L'＆' || src[index_src] == L'&') {
                         tokens->tokens[token_index].type = TOK_OPR_REFER;
                     } else {
                         tokens->tokens[token_index].type = TOK_NIL;
@@ -642,7 +655,7 @@ static int hexValue(wchar_t c) {
     if (c >= L'A' && c <= L'F') return c - L'A' + 10;
     return -1;
 }
-//字符串转义
+// 字符串转义
 wchar_t* escape(const wchar_t* src) {
     if (!src) return NULL;
 
@@ -661,19 +674,19 @@ wchar_t* escape(const wchar_t* src) {
 
         p++;  // 跳过 '\'
 
-        if(*p == L'n') {
+        if (*p == L'n') {
             *q++ = L'\n';
             p++;
-        } else if(*p == L'r') {
+        } else if (*p == L'r') {
             *q++ = L'\r';
             p++;
-        } else if(*p == L't') {
+        } else if (*p == L't') {
             *q++ = L'\t';
             p++;
-        } else if(*p == L'\\') {
+        } else if (*p == L'\\') {
             *q++ = L'\\';
             p++;
-        } else if(*p == L'0') {  //八进制 \0xx
+        } else if (*p == L'0') {  // 八进制 \0xx
             int value = 0;
             int count = 0;
             while (count < 3 && *p >= L'0' && *p <= L'7') {
@@ -682,7 +695,7 @@ wchar_t* escape(const wchar_t* src) {
                 count++;
             }
             *q++ = (wchar_t)value;
-        } else if(*p == L'u') {
+        } else if (*p == L'u') {
             p++;
             int value = 0;
             int digits = 0;
@@ -696,7 +709,7 @@ wchar_t* escape(const wchar_t* src) {
             }
 
             *q++ = (wchar_t)value;
-        } else if(L'0' < *p && *p <= L'9') {
+        } else if (L'0' < *p && *p <= L'9') {
             int value = 0;
             int count = 0;
             while (count < 3 && *p >= L'0' && *p <= L'9') {

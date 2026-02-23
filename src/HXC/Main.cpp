@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <wchar.h>
+
 #include <string>
 
 #ifdef _WIN32
@@ -16,10 +17,10 @@ FILE* outputStream = NULL;
 FILE* logStream = NULL;
 FILE* errorStream = NULL;
 #include "Error.h"
+#include "Generator.h"
 #include "IR.h"
 #include "Lexer.h"
 #include "Scanner.h"
-#include "Generator.h"
 int main(int argc, char* argv[]) {
     initLocale();
     clock_t start, end;
