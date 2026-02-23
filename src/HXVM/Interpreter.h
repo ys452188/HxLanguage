@@ -369,8 +369,11 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
             fwprintf(errorStream, ERR_LABEL L"非法指令格式\n");
             return -1;
         }
-        int32_t argCount = *((uint32_t*)inst.params[1].value);
-        Procedure& proc = (obj.procedures.at(*((int32_t*)inst.params[0].value)));
+        int32_t argCount = 0;
+        memcpy(&argCount, inst.params[1].value, sizeof(int32_t));
+        int32_t procAddr = 0;
+        memcpy(&procAddr, inst.params[0].value, sizeof(int32_t));
+        Procedure& proc = (obj.procedures.at(procAddr));
         std::vector<char> localStack(proc.stackSize);
         std::vector<Symbol> localSymbol(proc.localVarSize);
         if (opStack.top < argCount) {
@@ -446,6 +449,9 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
     }
     case OP_INT_TO_FLOAT: {
         _OpStack& topRef = opStack.opStack[opStack.top - 1];
+#ifdef HX_DEBUG
+        wprintf(LOG_LABEL L"i32->double\n");
+#endif
         int32_t intVal = *((int32_t*)topRef.value);
         double floatVal = (double)intVal;
 
@@ -456,6 +462,9 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
         break;
     }
     case OP_CHAR_TO_FLOAT: {
+#ifdef HX_DEBUG
+        wprintf(LOG_LABEL L"char(u16)->double\n");
+#endif
         _OpStack& topRef = opStack.opStack[opStack.top - 1];
         uint16_t charVal = *((uint16_t*)topRef.value);
         double floatVal = (double)charVal;
@@ -470,6 +479,9 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
 
     }
     case OP_FLOAT_TO_INT: {
+#ifdef HX_DEBUG
+        wprintf(LOG_LABEL L"double->i32\n");
+#endif
         _OpStack& topRef = opStack.opStack[opStack.top - 1];
         double floatVal = *((double*)topRef.value);
         int32_t intVal = (int32_t)floatVal;

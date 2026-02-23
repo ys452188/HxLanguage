@@ -4,11 +4,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <wchar.h>
-
 #include <cstdio>
 #include <string>
-typedef enum {
-    OP_NOP,
+
+#pragma pack(push, 1) // 强制 1 字节对齐
+typedef uint8_t Opcode;
+enum {
+    OP_NOP = 0,
     OP_LOAD_CONST,  // 加载常量至栈顶 OP_LOAD_CONST <param_type> <param_value> |
     // OP_LOAD_CONST <const_index>
     OP_LOAD_VAR,   // 加载变量至栈顶
@@ -33,9 +35,10 @@ typedef enum {
     OP_INT_TO_STRING,
     //连接字符串
     OP_STRING_CONCAT,
-} Opcode;
-enum ParamType {
-    PARAM_TYPE_INT,
+};
+typedef uint8_t ParamType;
+enum {
+    PARAM_TYPE_INT = 0,
     PARAM_TYPE_FLOAT,  // double
     PARAM_TYPE_CHAR,
     PARAM_TYPE_BOOL,
@@ -119,19 +122,19 @@ static int writeHeader(FILE* file) {
     |  value[1](u16)   |
     ..................
 *************************/
-static int writeWstring(wchar_t* wstr, FILE* file) {
-    if (!wstr) {  // NULL按长度为0处理
-        int size = sizeof(uint16_t);
-        if (fwrite(&size, sizeof(uint32_t), 1, file) != 1) return -1;
-        uint16_t value = (uint16_t)(L'\0');
-        if (fwrite(&value, sizeof(uint16_t), 1, file) != 1) return -1;
-        return 0;
+static int writeWstring(const wchar_t* wstr, FILE* file) {
+    if (!wstr) {
+        uint32_t byteLen = 0;
+        return fwrite(&byteLen, sizeof(byteLen), 1, file) == 1 ? 0 : -1;
     }
-    int size = wcslen(wstr) * sizeof(uint16_t);
-    if (fwrite(&size, sizeof(uint32_t), 1, file) != 1) return -1;
-    for (int i = 0; i < wcslen(wstr); i++) {
-        uint16_t value = (uint16_t)(wstr[i]);
-        if (fwrite(&value, sizeof(uint16_t), 1, file) != 1) return -1;
+
+    uint32_t len = wcslen(wstr);
+    uint32_t byteLen = (len + 1) * sizeof(uint32_t); // 含 \0
+    if (fwrite(&byteLen, sizeof(byteLen), 1, file) != 1) return -1;
+
+    for (uint32_t i = 0; i <= len; i++) {
+        uint32_t cp = (uint32_t)wstr[i];
+        if (fwrite(&cp, sizeof(cp), 1, file) != 1) return -1;
     }
     return 0;
 }
@@ -214,8 +217,7 @@ static int writeInstruction(Instruction& inst, FILE* file) {
     }
 #endif
     // 写opcode
-    char opcode = (char)(inst.opcode);
-    if (fwrite(&(opcode), sizeof(char), 1, file) != 1) return -1;
+    if (fwrite(&(inst.opcode), sizeof(Opcode), 1, file) != 1) return -1;
     // param
     for (int i = 0; i < 3; i++) {
         if (writeParam((inst.params[i]), file)) return -1;

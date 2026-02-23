@@ -93,7 +93,7 @@ Tokens* lex(wchar_t* src, int* err) {
         // printf("%lc\n", src[index_src]);
         if (src[index_src] == L'#') {  // 处理注释
             while (index_src < length_src) {
-                if (src[index_src] == L'\n') break;
+                if (src[index_src] == L'\n' || src[index_src] == L'\r') break;
                 index_src++;
             }
             line++;
@@ -103,7 +103,19 @@ Tokens* lex(wchar_t* src, int* err) {
             if (index_src + 1 < length_src) {
                 if (src[index_src + 1] == L'-') {
                     while (index_src < length_src) {
-                        if (src[index_src] == L'\n') break;
+                        if (src[index_src] == L'\n' || src[index_src] == L'\r') break;
+                        index_src++;
+                    }
+                    line++;
+                    continue;
+                }
+            }
+        }
+        if (src[index_src] == L'/') {
+            if (index_src + 1 < length_src) {
+                if (src[index_src + 1] == L'/') {
+                    while (index_src < length_src) {
+                        if (src[index_src] == L'\n' || src[index_src] == L'\r') break;
                         index_src++;
                     }
                     line++;

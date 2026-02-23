@@ -7,8 +7,9 @@
 
 #include <string>
 #include <vector>
-typedef enum {
-    OP_NOP,
+typedef uint8_t Opcode;
+enum {
+    OP_NOP = 0,
     OP_LOAD_CONST,  // 加载常量至栈顶 OP_LOAD_CONST <param_value> | OP_LOAD_CONST
     // <const_index>
     OP_LOAD_VAR,   // 加载变量至栈顶
@@ -33,9 +34,10 @@ typedef enum {
     OP_INT_TO_STRING,
     //连接字符串
     OP_STRING_CONCAT
-} Opcode;
-enum ParamType {
-    PARAM_TYPE_INT,
+};
+typedef uint8_t ParamType;
+enum {
+    PARAM_TYPE_INT = 0,
     PARAM_TYPE_FLOAT,  // double
     PARAM_TYPE_CHAR,
     PARAM_TYPE_BOOL,
@@ -91,38 +93,37 @@ typedef struct ObjectCode {
 } ObjectCode;
 
 static wchar_t* readWstring(FILE* file) {
-    uint32_t byteLen;  // 字节长度（包含末尾 \0 的字节）
-    if (fread(&byteLen, sizeof(uint32_t), 1, file) != 1) return nullptr;
+    uint32_t byteLen;
+    if (fread(&byteLen, sizeof(byteLen), 1, file) != 1) return nullptr;
+    if (byteLen == 0) return nullptr;
 
-    uint32_t charCount = byteLen / sizeof(uint16_t);
-    if (charCount == 0) return nullptr;
+    uint32_t charCount = byteLen / sizeof(uint32_t);
 
-    // 1. 先读取原始的 u16 数据
-    uint16_t* u16Buf = (uint16_t*)malloc(byteLen);
-    if (!u16Buf) return nullptr;
+    uint32_t* buf = (uint32_t*)malloc(byteLen);
+    if (!buf) return nullptr;
 
-    if (fread(u16Buf, 1, byteLen, file) != byteLen) {
-        free(u16Buf);
+    if (fread(buf, sizeof(uint32_t), charCount, file) != charCount) {
+        free(buf);
         return nullptr;
     }
-    // 转换为当前平台的 wchar_t (处理 sizeof(wchar_t) 可能为 4 的情况)
-    wchar_t* wstr = (wchar_t*)malloc(charCount * sizeof(wchar_t));
+
+    wchar_t* wstr = (wchar_t*)calloc(charCount, sizeof(wchar_t));
     if (!wstr) {
-        free(u16Buf);
+        free(buf);
         return nullptr;
     }
+
     for (uint32_t i = 0; i < charCount; i++) {
-        wstr[i] = (wchar_t)u16Buf[i];
+        wstr[i] = (wchar_t)buf[i];
     }
-    free(u16Buf);
+
+    free(buf);
     return wstr;
 }
 // 读取指令
 static int readInstruction(Instruction& instr, FILE* file) {
-    // 读取 Opcode (写入时是 char 类型)
-    char opcodeChar;
-    if (fread(&opcodeChar, sizeof(char), 1, file) != 1) return -1;
-    instr.opcode = (Opcode)opcodeChar;
+    // 读取 Opcode
+    if (fread(&(instr.opcode), sizeof(Opcode), 1, file) != 1) return -1;
     // 读取 3 个参数
     for (int i = 0; i < 3; i++) {
         char typeChar;

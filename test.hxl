@@ -1,9 +1,9 @@
 fun:main(void) -> {
-    __hx_write_string__ "\33[1;31m\u200\33[1;32mh\33[1;33me\33[1;34ml\33[1;35ml\33[1;36mo\033[0m\n";
+    //__hx_write_string__ "\33[1;31m\u200\33[1;32mh\33[1;33me\33[1;34ml\33[1;35ml\33[1;36mo\033[0m\n";
     foo();
-    ret ：1+foo();
+    ret ：0;
 }
 定义函数:foo(无参数){
-    __hx_write_string__ "Hello From funCall foo!\n"
-    返回: 1+'\33';
+    //__hx_write_string__ "Hello From funCall foo!\n"
+    返回: 1+1;
 }
