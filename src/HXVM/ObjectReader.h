@@ -82,6 +82,8 @@ typedef struct ConstantPool {
 //----------------------------------
 typedef struct ObjectCodeHeader {
     char magic[4];  // 魔数 "HXOC"
+    float version;
+    uint8_t isInDebugMode;
 } ObjectCodeHeader;
 //--------------------------------------
 typedef struct ObjectCode {
@@ -142,18 +144,34 @@ int readObjectCode(std::string path, ObjectCode& obj) {
     FILE* file = fopen(path.c_str(), "rb");
     if (!file) return -1;
 
-    // 1. 验证头信息 "HXOC"
-    char header[4];
-    if (fread(header, 1, 4, file) != 4) {
+    //验证头信息 "HXOC"
+    char magic[4];
+    if (fread(magic, 1, 4, file) != 4) {
         fclose(file);
         return -1;
     }
-    if (header[0] != 'H' || header[1] != 'X' || header[2] != 'O' ||
-            header[3] != 'C') {
+    if (magic[0] != 'H' || magic[1] != 'X' || magic[2] != 'O' ||
+            magic[3] != 'C') {
         fclose(file);
         return -1;
     }
-    // 2.读取常量池
+    float version = 0.0f;
+    if (fread(&version, sizeof(float), 1, file) != 1) {
+        fclose(file);
+        return -1;
+    }
+    if(version > HXVM_VERSION) {
+        fwprintf(errorStream, ERR_LABEL L"本虚拟机版本过低，文件要求：%f\n", version);
+        fclose(file);
+        return -1;
+    }
+    uint8_t isInDebugMode = false;
+    if (fread(&isInDebugMode, sizeof(uint8_t), 1, file) != 1) {
+        fclose(file);
+        return -1;
+    }
+
+    //读取常量池
     if (fread(&(obj.constantPool.size), sizeof(uint32_t), 1, file) != 1) {
         fclose(file);
         return -1;

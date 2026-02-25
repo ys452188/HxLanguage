@@ -13,6 +13,9 @@ public:
     ~HxMemoryAllocer() {
         for(int i = 0; i < this->heapMemoryBlocks.size(); i++) {
             if(this->heapMemoryBlocks.at(i)) {
+#ifdef HX_DEBUG
+                wprintf(LOG_LABEL L"释放内存 %p\n", this->heapMemoryBlocks.at(i));
+#endif
                 free(this->heapMemoryBlocks.at(i));
                 this->heapMemoryBlocks.at(i) = NULL;
             }
@@ -31,8 +34,8 @@ public:
         if(!memory) return NULL;
         for(int i = 0; i < this->heapMemoryBlocks.size(); i++) {
             if(this->heapMemoryBlocks.at(i) == old) {
-                free(this->heapMemoryBlocks.at(i));
                 this->heapMemoryBlocks.at(i) = memory;
+                break;
             }
         }
         return memory;
@@ -70,7 +73,7 @@ static int interpretProcedure(Procedure& proc, OpStack& opStack,
                               std::vector<Symbol>& localSymbol);
 static int interpretInstruction(Instruction& inst, OpStack& opStack,
                                 std::vector<char>& stack, int& usedStackSize,
-                                ObjectCode& obj);
+                                ObjectCode& obj, int& instIndex);
 int interpret(ObjectCode& obj, int& err) {
 #ifdef HX_DEBUG
     wprintf(LOG_LABEL L"开始解释\n");
@@ -105,12 +108,14 @@ int interpretProcedure(Procedure& proc, OpStack& opStack, ObjectCode& obj,
 #ifdef HX_DEBUG
     wprintf(LOG_LABEL L"解释过程\n");
 #endif
+    uint32_t jmpTo = 0;
     for (int i = 0; i < proc.instructionSize; i++) {
 #ifdef HX_DEBUG
         wprintf(LOG_LABEL L"解释第%d指令\n", i);
 #endif
+        jmpTo = 0;
         if (interpretInstruction(proc.instructions.at(i), opStack, stack,
-                                 usedStackSize, obj))
+                                 usedStackSize, obj, i))
             return -1;
     }
     return 0;
@@ -177,7 +182,7 @@ static inline int promoteNumeric(_OpStack& a, _OpStack& b) {
 }
 int interpretInstruction(Instruction& inst, OpStack& opStack,
                          std::vector<char>& stack, int& usedStackSize,
-                         ObjectCode& obj) {
+                         ObjectCode& obj, int& instIndex) {
 #ifdef HX_DEBUG
     // wprintf(LOG_LABEL L"__________________________________________\n");
 #endif
@@ -472,7 +477,7 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
         topRef.type = TYPE_FLOAT;
         topRef.size = sizeof(double);
         memset(topRef.value, 0, 8);
-        memcpy(topRef.value, &charVal, sizeof(double));
+        memcpy(topRef.value, &floatVal, sizeof(double));
         break;
     }
     case OP_CHAR_TO_STRING: {
@@ -493,7 +498,45 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
         break;
     }
     case OP_INT_TO_STRING: {
+        _OpStack& topRef = opStack.opStack[opStack.top - 1];
+#ifdef HX_DEBUG
+        wprintf(LOG_LABEL L"i32 -> string\n");
+#endif
 
+        int32_t intVal = *((int32_t*)topRef.value);
+        wchar_t buffer[32];
+        int written = swprintf(buffer, 32, L"%d", intVal);
+        if (written < 0) {
+            fwprintf(errorStream, ERR_LABEL L"字符串转换失败\n");
+            return -1;
+        }
+        size_t allocSize = (written + 1) * sizeof(wchar_t);
+        wchar_t* str = (wchar_t*)memoryAllocer.hxMalloc(allocSize);
+        if (!str) {
+            fwprintf(errorStream, ERR_LABEL L"内存分配失败\n");
+            return -1;
+        }
+        wcscpy(str, buffer);
+        topRef.type = TYPE_STRING;
+        topRef.size = sizeof(wchar_t*);
+        memset(topRef.value, 0, 8);
+        memcpy(topRef.value, &str, sizeof(wchar_t*));
+        break;
+    }
+    case OP_JMP: {
+#ifdef HX_DEBUG
+        wprintf(LOG_LABEL L"跳转\n");
+#endif
+        if(inst.params[0].type != PARAM_TYPE_INDEX) {
+            if (inst.params[0].type != PARAM_TYPE_INDEX) {
+                fwprintf(errorStream, ERR_LABEL L"非法指令格式\n");
+                return -1;
+            }
+        }
+        uint32_t instAddr = 0;
+        memcpy(&instAddr, inst.params[0].value, sizeof(uint32_t));
+        instIndex = (int)instAddr-1;   //for末尾有i++;
+        return 0;
     }
     }
 #ifdef HX_DEBUG

@@ -59,7 +59,7 @@ wchar_t* keyword[] = {  // 关键字
     L"ret",        L"var\0",      L"con\0",      L"fun\0",   L"class",
     L"定义变量\0", L"定义常量\0", L"定义函数\0", L"定义类",  L"公有成员",
     L"私有成员",   L"受保护成员", L"public",     L"private", L"proctected",
-    L"它的类型是", L"它的父类是", L"parent",     NULL
+    L"它的类型是", L"它的父类是", L"parent", L"repeat", L"循环",    NULL
 };
 static inline wchar_t* escape(const wchar_t* src);
 static inline bool isKeyword(wchar_t* str);  // 判断是否是关键字

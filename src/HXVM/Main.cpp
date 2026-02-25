@@ -1,4 +1,5 @@
 #define HX_DEBUG
+#define HXVM_VERSION 0.114f
 #define ERR_LABEL L"\33[1;31m[E]\33[0m"
 #define LOG_LABEL L"\33[1;33m[LOG]\33[0m"
 #define INFO_LABEL L"\33[1;34m[INFO]\33[0m"

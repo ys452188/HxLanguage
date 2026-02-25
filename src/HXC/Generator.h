@@ -27,7 +27,8 @@ public:
         for (int i = 0; i < pitches.size(); i++) {
             if (pitches.at(i)->fun == fun) return pitches.at(i);
         }
-        FunCallPitch* pitch = new FunCallPitch(fun);
+        FunCallPitch* pitch = new (std::nothrow)FunCallPitch(fun);
+        if(pitch == nullptr) return NULL;
         pitches.push_back(pitch);
         return pitch;
     }
@@ -185,6 +186,9 @@ static void listObjectCode_Proc(Procedure* proc) {
         case OP_POP:
             fwprintf(logStream, L"\t%03u: \33[1;34m OP_POP\33[0m\n", i);
             break;
+        case OP_JMP:
+            fwprintf(logStream, L"\t%03u: \33[1;34m OP_JMP %u\33[0m\n", i, *((uint32_t*)ins.params[0].value));
+            break;
         default:
             fwprintf(logStream, L"\t%03u: \33[1;31mOP_NOP\33[0m\n", i);
         }
@@ -234,7 +238,7 @@ ObjectCode* generateObjectCode(IR_Program* program, int* err) {
         *err = 255;
         return NULL;
     }
-    ObjectCode* objCode = new ObjectCode;
+    ObjectCode* objCode = new (std::nothrow)ObjectCode;
     objCode->constantPool.size = 0;
     objCode->constantPool.constants = NULL;
     objCode->procedureSize = 0;
@@ -253,10 +257,16 @@ ObjectCode* generateObjectCode(IR_Program* program, int* err) {
 #ifdef HX_DEBUG
         fwprintf(logStream, L"编译函数 %ls\n", program->functions[i]->name);
 #endif
-        objFun.push_back(generateFunction(
-                             program->functions[i], pitchTable, &(objCode->constantPool),
-                             program->functions, program->function_count, err));
-        objFun.at(objFun.size() - 1)->fun = program->functions[i];
+
+        Procedure* newProc = generateFunction(
+                                 program->functions[i], pitchTable, &(objCode->constantPool),
+                                 program->functions, program->function_count, err);
+
+        if (newProc == NULL || *err != 0) {
+            return NULL;
+        }
+        newProc->fun = program->functions[i];
+        objFun.push_back(newProc);
         if (*err != 0) return NULL;
 #ifdef HX_DEBUG
         listObjectCode_Proc(objFun.at(i));
@@ -340,6 +350,14 @@ static int getVarSize(IR_DataType type, IR_Class** class_table,
         return 0;
     }
 }
+static int generateStatement(int& index, FunCallPitchTable& pitchTable,
+                             ConstantPool* constantPool,
+                             IR_Function** all_functions,
+                             int all_function_count,
+                             IR_Function* function,
+                             SymbolTable& localeSymbolTable,
+                             Procedure* proc,
+                             int* err);
 Procedure* generateFunction(IR_Function* function,
                             FunCallPitchTable& pitchTable,
                             ConstantPool* constantPool,
@@ -350,7 +368,7 @@ Procedure* generateFunction(IR_Function* function,
         return NULL;
     }
     initLocale();
-    Procedure* proc = new Procedure;
+    Procedure* proc = new (std::nothrow)Procedure();
     if (!proc) {
         *err = -1;
         return NULL;
@@ -370,203 +388,285 @@ Procedure* generateFunction(IR_Function* function,
     localeSymbolTable.fun_size = all_function_count;
     proc->instructionSize = 0;
     while (index < function->body_token_count) {
-        Token currentToken = function->bodyTokens[index];
-        // 返回::= ret:exp
-        // 返回::= 返回:exp
-        // PUSH ...
-        // OP_RET
-        // wprintf(L"%ls\n", currentToken.value);
-        if (wcscmp(currentToken.value, L"ret") == 0 ||
-                wcscmp(currentToken.value, L"返回") == 0) {
-#ifdef HX_DEBUG
-            log(L"解析到返回语句\n");
-#endif
-            /* 语法：ret : <expression> ;
-             */
-            if (index + 1 >= function->body_token_count) {
-                setError(ERR_RET, currentToken.line, NULL);
-                *err = 255;
-                delete (proc);
-                return NULL;
-            }
-            index++;  // 指向冒号
-            if (function->bodyTokens[index].type == TOK_END) {
-                if (function->returnType.kind != IR_DT_VOID &&
-                        function->isReturnTypeKnown) {
-                    setError(ERR_RET_VAL, currentToken.line, NULL);
-                    *err = 255;
-                    delete (proc);
-                    return NULL;
-                }
-                // 空返回
-#ifdef HX_DEBUG
-                log(L"生成空返回指令\n");
-#endif
-                Instruction newInst = {};
-                newInst.opcode = OP_RET;
-                proc->instructions.push_back(newInst);
-                proc->instructionSize++;
-                continue;
-            }
-            //:
-            if (function->bodyTokens[index].type != TOK_OPR_COLON) {
-                setError(ERR_RET, currentToken.line, NULL);
-                *err = 255;
-                delete (proc);
-                return NULL;
-            }
-            index++;  // 指向表达式起始位置
-            // wprintf(L"%ls", function->bodyTokens[index].value);
-            ASTNode* expNode = parseExpression(function->bodyTokens, &index,
-                                               function->body_token_count, pitchTable,
-                                               &localeSymbolTable, err);
-            if (*err != 0 || !expNode) {
-                delete (proc);
-                return NULL;
-            }
-#ifdef HX_DEBUG
-            log(L"生成返回值表达式指令...\n");
-#endif
-            // 生成表达式指令
-            int inst_index = proc->instructionSize;
-            int inst_size = proc->instructionSize;
-            generateInstructionsFromAST(proc->instructions, &inst_index, &inst_size,
-                                        expNode, constantPool, err);
-            if (*err != 0) {
-                freeAST(expNode);
-                return NULL; /* 保留 generateInstructionsFromAST 设置的错误码 */
-            }
-            proc->instructionSize = inst_index;
-            freeAST(expNode);
-            // 生成返回指令
-            Instruction newInst = {};
-            newInst.opcode = OP_RET;
-            proc->instructions.push_back(newInst);
-            proc->instructionSize++;
-            index++;
-            if (function->bodyTokens[index].type != TOK_END) {
-                setError(ERR_RET, currentToken.line, NULL);
-                *err = 255;
-                freeAST(expNode);
-                delete (proc);
-                return NULL;
-            }
-        } else if (wcscmp(currentToken.value, L"__hx_write_string__") == 0) {
-            if (index + 1 >= function->body_token_count) {
-                continue;
-            }
-            index++;
-            if ((function->bodyTokens[index].type != TOK_VAL) ||
-                    (function->bodyTokens[index].mark != STR))
-                continue;
-            Instruction newInst = {};
-            newInst.opcode = OP_PRINT_STRING;
-
-            constantPool->constants = (Constant*)realloc(
-                                          constantPool->constants, sizeof(Constant) * (constantPool->size + 1));
-            if (!constantPool->constants) {
-                *err = -1;
-                return NULL;
-            }
-            constantPool->constants[constantPool->size].type = CONST_STRING;
-            constantPool->constants[constantPool->size].value.string_value =
-                (wchar_t*)calloc(wcslen(function->bodyTokens[index].value) + 1,
-                                 sizeof(wchar_t));
-            if (!constantPool->constants[constantPool->size].value.string_value) {
-                *err = -1;
-                return NULL;
-            }
-            wcscpy(constantPool->constants[constantPool->size].value.string_value,
-                   function->bodyTokens[index].value);
-            constantPool->constants[constantPool->size].size =
-                (uint16_t)wcslen(function->bodyTokens[index].value) *
-                sizeof(uint16_t);
-            constantPool->size += 1;
-            newInst.params[0].type = PARAM_TYPE_INDEX;
-            uint32_t strIndex = constantPool->size - 1;
-            memcpy(newInst.params[0].value, &(strIndex), sizeof(uint32_t));
-            newInst.params[0].size = sizeof(uint32_t);
-
-            proc->instructions.push_back(newInst);
-            proc->instructionSize++;
-        } else if (currentToken.type == TOK_ID) {  // 赋值或调用函数
-            ASTNode* expNode = parseExpression(function->bodyTokens, &index,
-                                               function->body_token_count, pitchTable,
-                                               &localeSymbolTable, err);
-            if (*err != 0 || !expNode) {
-                delete (proc);
-                return NULL;
-            }
-            // 生成表达式指令
-            int inst_index = proc->instructionSize;
-            int inst_size = proc->instructionSize;
-            generateInstructionsFromAST(proc->instructions, &inst_index, &inst_size,
-                                        expNode, constantPool, err);
-            if(expNode->kind == NODE_FUN_CALL) {
-                //有返回值要手动弹出
-                if(expNode->data.funCall.ret_type.kind != IR_DT_VOID) {
-                    Instruction popInst = {};
-                    popInst.opcode = OP_POP;
-                    proc->instructions.push_back(popInst);
-                    inst_index++;
-                    inst_size++;
-                }
-            }
-            if (*err != 0) {
-                freeAST(expNode);
-                return NULL; /* 保留 generateInstructionsFromAST 设置的错误码 */
-            }
-            proc->instructionSize = inst_index;
-            freeAST(expNode);
-        } else if (wcscmp(currentToken.value, L"var") ==
-                   0) {  // var:id[->type][=exp];
-            if (index + 1 >= function->body_token_count) {
-                setError(ERR_DEF_VAR, currentToken.line, NULL);
-                *err = 255;
-                delete (proc);
-                return NULL;
-            }
-            index++;  // 指向冒号
-            if (function->bodyTokens[index].type != TOK_OPR_COLON) {
-                setError(ERR_DEF_VAR, currentToken.line, NULL);
-                *err = 255;
-                delete (proc);
-                return NULL;
-            }
-            if (index + 1 >= function->body_token_count) {
-                setError(ERR_DEF_VAR, currentToken.line, NULL);
-                *err = 255;
-                delete (proc);
-                return NULL;
-            }
-            index++;  // 指向标识符
-            if (function->bodyTokens[index].type != TOK_ID) {
-                setError(ERR_DEF_VAR, currentToken.line, NULL);
-                *err = 255;
-                delete (proc);
-                return NULL;
-            }
-            if (index + 1 >= function->body_token_count) {
-                setError(ERR_DEF_VAR, currentToken.line, NULL);
-                *err = 255;
-                delete (proc);
-                return NULL;
-            }
-            index++;  // 指向结束标志或->或=
-            if (function->bodyTokens[index].type == TOK_OPR_POINT) {
-            } else if (function->bodyTokens[index].type == TOK_OPR_SET) {
-            } else if (function->bodyTokens[index].type == TOK_END) {
-            } else {
-                setError(ERR_DEF_VAR, currentToken.line, NULL);
-                *err = 255;
-                delete (proc);
-                return NULL;
-            }
-        }
+        if(generateStatement(index, pitchTable, constantPool, all_functions, all_function_count,
+                             function,localeSymbolTable, proc, err)) return NULL;
         index++;
     }
     function->proc = proc;
     return proc;
+}
+int generateStatement(int& index, FunCallPitchTable& pitchTable,
+                      ConstantPool* constantPool,
+                      IR_Function** all_functions,
+                      int all_function_count,
+                      IR_Function* function,
+                      SymbolTable& localeSymbolTable,
+                      Procedure* proc,
+                      int* err) {
+    Token& currentToken = function->bodyTokens[index];
+    if(currentToken.type == TOK_END) return 0;
+    if (wcscmp(currentToken.value, L"ret") == 0 ||
+            wcscmp(currentToken.value, L"返回") == 0) {
+#ifdef HX_DEBUG
+        log(L"解析到返回语句\n");
+#endif
+        /* 语法：ret : <expression> ;
+         */
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_RET, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向冒号
+        if (function->bodyTokens[index].type == TOK_END) {
+            if (function->returnType.kind != IR_DT_VOID &&
+                    function->isReturnTypeKnown) {
+                setError(ERR_RET_VAL, currentToken.line, NULL);
+                *err = 255;
+                delete (proc);
+                return 255;
+            }
+            // 空返回
+#ifdef HX_DEBUG
+            log(L"生成空返回指令\n");
+#endif
+            Instruction newInst = {};
+            newInst.opcode = OP_RET;
+            proc->instructions.push_back(newInst);
+            proc->instructionSize++;
+            return 0;
+        }
+        //:
+        if (function->bodyTokens[index].type != TOK_OPR_COLON) {
+            setError(ERR_RET, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向表达式起始位置
+        // wprintf(L"%ls", function->bodyTokens[index].value);
+        ASTNode* expNode = parseExpression(function->bodyTokens, &index,
+                                           function->body_token_count, pitchTable,
+                                           &localeSymbolTable, err);
+        if (*err != 0 || !expNode) {
+            delete (proc);
+            return 255;
+        }
+#ifdef HX_DEBUG
+        log(L"生成返回值表达式指令...\n");
+#endif
+        // 生成表达式指令
+        int inst_index = proc->instructionSize;
+        int inst_size = proc->instructionSize;
+        generateInstructionsFromAST(proc->instructions, &inst_index, &inst_size,
+                                    expNode, constantPool, err);
+        if (*err != 0) {
+            freeAST(expNode);
+            return 255;
+        }
+        proc->instructionSize = inst_index;
+        freeAST(expNode);
+        // 生成返回指令
+        Instruction newInst = {};
+        newInst.opcode = OP_RET;
+        proc->instructions.push_back(newInst);
+        proc->instructionSize++;
+        index++;
+        if (function->bodyTokens[index].type != TOK_END) {
+            setError(ERR_RET, currentToken.line, NULL);
+            *err = 255;
+            freeAST(expNode);
+            delete (proc);
+            return 255;
+        }
+    } else if (wcscmp(currentToken.value, L"__hx_write_string__") == 0) {
+        if (index + 1 >= function->body_token_count) {
+            return 0;
+        }
+        index++;
+        if ((function->bodyTokens[index].type != TOK_VAL) ||
+                (function->bodyTokens[index].mark != STR))
+            return 0;
+        Instruction newInst = {};
+        newInst.opcode = OP_PRINT_STRING;
+
+        constantPool->constants = (Constant*)realloc(
+                                      constantPool->constants, sizeof(Constant) * (constantPool->size + 1));
+        if (!constantPool->constants) {
+            *err = -1;
+            return -1;
+        }
+        constantPool->constants[constantPool->size].type = CONST_STRING;
+        constantPool->constants[constantPool->size].value.string_value =
+            (wchar_t*)calloc(wcslen(function->bodyTokens[index].value) + 1,
+                             sizeof(wchar_t));
+        if (!constantPool->constants[constantPool->size].value.string_value) {
+            *err = -1;
+            return -1;
+        }
+        wcscpy(constantPool->constants[constantPool->size].value.string_value,
+               function->bodyTokens[index].value);
+        constantPool->constants[constantPool->size].size =
+            (uint16_t)wcslen(function->bodyTokens[index].value) *
+            sizeof(uint16_t);
+        constantPool->size += 1;
+        newInst.params[0].type = PARAM_TYPE_INDEX;
+        uint32_t strIndex = constantPool->size - 1;
+        memcpy(newInst.params[0].value, &(strIndex), sizeof(uint32_t));
+        newInst.params[0].size = sizeof(uint32_t);
+
+        proc->instructions.push_back(newInst);
+        proc->instructionSize++;
+        if (index + 1 >= function->body_token_count) {
+            return 0;
+        }
+        index++;
+        if ((function->bodyTokens[index].type != TOK_END))
+            return 0;
+    } else if (currentToken.type == TOK_ID) {  // 赋值或调用函数
+        ASTNode* expNode = parseExpression(function->bodyTokens, &index,
+                                           function->body_token_count, pitchTable,
+                                           &localeSymbolTable, err);
+        if (*err != 0 || !expNode) {
+            delete (proc);
+            return 255;
+        }
+        // 生成表达式指令
+        int inst_index = proc->instructionSize;
+        int inst_size = proc->instructionSize;
+        generateInstructionsFromAST(proc->instructions, &inst_index, &inst_size,
+                                    expNode, constantPool, err);
+        if(expNode->kind == NODE_FUN_CALL) {
+            //有返回值要手动弹出
+            if(expNode->data.funCall.ret_type.kind != IR_DT_VOID) {
+                Instruction popInst = {};
+                popInst.opcode = OP_POP;
+                proc->instructions.push_back(popInst);
+                inst_index++;
+                inst_size++;
+            }
+        }
+        if (*err != 0) {
+            freeAST(expNode);
+            return 255;
+        }
+        proc->instructionSize = inst_index;
+        freeAST(expNode);
+    } else if (wcscmp(currentToken.value, L"var") ==
+               0) {  // var:id[->type][=exp];
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向冒号
+        if (function->bodyTokens[index].type != TOK_OPR_COLON) {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向标识符
+        if (function->bodyTokens[index].type != TOK_ID) {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向结束标志或->或=
+        if (function->bodyTokens[index].type == TOK_OPR_POINT) {
+        } else if (function->bodyTokens[index].type == TOK_OPR_SET) {
+        } else if (function->bodyTokens[index].type == TOK_END) {
+        } else {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+    } else if(wcscmp(currentToken.value, L"repeat") == 0) {   //循环 ::= repeat-> 语句|块 [until:exp]
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_REPEAT, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向->
+        if (function->bodyTokens[index].type != TOK_OPR_POINT) {
+            setError(ERR_REPEAT, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_REPEAT, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向语句或块
+        uint32_t jmpAddr = proc->instructions.size();
+        generateStatement(index, pitchTable, constantPool, all_functions, all_function_count,
+                          function,localeSymbolTable, proc, err);
+        //条件
+        if(wcscmp(function->bodyTokens[index].value, L"until")==0) {
+
+        }
+        Instruction jmpInst = {};
+        jmpInst.opcode = OP_JMP;
+        jmpInst.params[0].size = sizeof(uint32_t);
+        memcpy(jmpInst.params[0].value, &jmpAddr, jmpInst.params[0].size);
+        jmpInst.params[0].type = PARAM_TYPE_INDEX;
+        proc->instructions.push_back(jmpInst);
+    } else if (wcscmp(currentToken.value, L"循环") == 0) {   //循环::= 循环：语句|块 直到:exp
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_REPEAT, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向->
+        if (function->bodyTokens[index].type != TOK_OPR_COLON) {
+            setError(ERR_REPEAT, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_REPEAT, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向语句或块
+        uint32_t jmpAddr = proc->instructions.size();
+        generateStatement(index, pitchTable, constantPool, all_functions, all_function_count,
+                          function,localeSymbolTable, proc, err);
+        //条件
+        if(wcscmp(function->bodyTokens[index].value, L"直到")==0) {
+
+        }
+        Instruction jmpInst = {};
+        jmpInst.opcode = OP_JMP;
+        jmpInst.params[0].size = sizeof(uint32_t);
+        memcpy(jmpInst.params[0].value, &jmpAddr, jmpInst.params[0].size);
+        jmpInst.params[0].type = PARAM_TYPE_INDEX;
+        proc->instructions.push_back(jmpInst);
+    }
+    return 0;
 }
 void generateInstructionsFromAST(std::vector<Instruction>& instructions,
                                  int* inst_index, int* inst_size, ASTNode* node,

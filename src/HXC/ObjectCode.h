@@ -60,13 +60,13 @@ typedef struct Instruction {
 } Instruction;
 // 过程,用索引访问
 typedef struct Procedure {
-    bool isUsed;       // 这个变量不会写入
-    IR_Function* fun;  // 这个变量也不会写入
+    bool isUsed = false;       // 这个变量不会写入
+    IR_Function* fun = NULL;  // 这个变量也不会写入
 
-    uint32_t instructionSize;
+    uint32_t instructionSize = 0;
     std::vector<Instruction> instructions;
-    uint32_t stackSize;     // 栈大小
-    uint32_t localVarSize;  // 局部变量数量
+    uint32_t stackSize = 0;     // 栈大小
+    uint32_t localVarSize = 0;  // 局部变量数量
 } Procedure;
 //------------------------------------
 // 常量池
@@ -81,20 +81,22 @@ typedef struct Constant {
     } value;
 } Constant;
 typedef struct ConstantPool {
-    uint32_t size;
-    Constant* constants;
+    uint32_t size = 0;
+    Constant* constants = NULL;
 } ConstantPool;
 //----------------------------------
 typedef struct ObjectCodeHeader {
     char magic[4];  // 魔数 "HXOC"
+    float version = 0.0f;
+    uint8_t isInDebugMode = 0;
 } ObjectCodeHeader;
 //--------------------------------------
 typedef struct ObjectCode {
     ObjectCodeHeader header;
     ConstantPool constantPool;
-    uint32_t procedureSize;
+    uint32_t procedureSize = 0;
     std::vector<Procedure*> procedures;
-    int32_t start;  // 入口索引
+    int32_t start = 0;  // 入口索引
 } ObjectCode;
 //--------------------------------------
 // 写入目标代码
@@ -109,7 +111,11 @@ static int writeHeader(FILE* file) {
     header.magic[1] = 'X';
     header.magic[2] = 'O';
     header.magic[3] = 'C';
-    if (fwrite(&header, sizeof(header), 1, file) != 1) return -1;
+    header.version = HXC_VERSION;
+    header.isInDebugMode = (uint8_t)isInDebugMode;
+    if (fwrite(&(header.magic), sizeof(header.magic), 1, file) != 1) return -1;
+    if (fwrite(&(header.version), sizeof(header.version), 1, file) != 1) return -1;
+    if (fwrite(&(header.isInDebugMode), sizeof(header.isInDebugMode), 1, file) != 1) return -1;
     return 0;
 }
 // 存的是真实大小
@@ -211,6 +217,9 @@ static int writeInstruction(Instruction& inst, FILE* file) {
         break;
     case OP_POP:
         fwprintf(logStream, L"\33[1;34m OP_POP\33[0m\n");
+        break;
+    case OP_JMP:
+        fwprintf(logStream, L"\33[1;34m OP_JMP\33[0m\n");
         break;
     default:
         fwprintf(logStream, L"\33[1;31mOP_NOP\33[0m)\n");

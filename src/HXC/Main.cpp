@@ -1,4 +1,6 @@
 #define HX_DEBUG
+#define HXC_VERSION 0.114f
+bool isInDebugMode = false;
 #include <errno.h>
 #include <stdio.h>
 #include <time.h>
