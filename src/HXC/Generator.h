@@ -15,7 +15,7 @@
 typedef uint16_t wchar;
 class FunCallPitch {  // 回填CALL指令,被指向
 public:
-    FunCallPitch(IR_Function* ir_fun) : fun(ir_fun) {}
+    FunCallPitch(IR_Function* ir_fun) noexcept : fun(ir_fun) {}
     IR_Function* fun;
     int index;
 };
@@ -23,7 +23,7 @@ class FunCallPitchTable {
     std::vector<FunCallPitch*> pitches;
 
 public:
-    FunCallPitch* enter(IR_Function* fun) {
+    FunCallPitch* enter(IR_Function* fun) noexcept {
         for (int i = 0; i < pitches.size(); i++) {
             if (pitches.at(i)->fun == fun) return pitches.at(i);
         }
@@ -59,12 +59,12 @@ public:
  * @param err: 错误码指针，发生错误时会设置为相应错误码
  * @return 生成的目标代码对象指针，发生错误时返回NULL
  */
-extern ObjectCode* generateObjectCode(IR_Program* program, int* err);
-extern void freeObjectCode(ObjectCode** obj);
+extern ObjectCode* generateObjectCode(IR_Program* program, int* err) noexcept;
+extern void freeObjectCode(ObjectCode** obj) noexcept;
 static void generateInstructionsFromAST(std::vector<Instruction>& instructions,
                                         int* inst_index, int* inst_size,
                                         ASTNode* node,
-                                        ConstantPool* constantPool, int* err);
+                                        ConstantPool* constantPool, int* err) noexcept;
 /*
  * 生成函数的目标代码
  * @param function: 中间表示的函数
@@ -75,12 +75,12 @@ static Procedure* generateFunction(IR_Function* function,
                                    FunCallPitchTable& pitchTable,
                                    ConstantPool* constantPool,
                                    IR_Function** all_functions,
-                                   int all_function_count, int* err);
+                                   int all_function_count, int* err) noexcept;
 /**
  * 生成定义变量的目标代码
  */
-static Procedure* generateVariable();
-static int getMainFunctionIndex(IR_Program* program) {
+static Procedure* generateVariable() noexcept;
+static int getMainFunctionIndex(IR_Program* program) noexcept {
     if (!program || !program->functions) return -1;
     int index = -1;
     for (int i = 0; i < program->function_count; i++) {
@@ -195,7 +195,7 @@ static void listObjectCode_Proc(Procedure* proc) {
     }
 }
 #endif
-static void markUsedFun(Procedure* fun, std::vector<Procedure*>& objFun) {
+static void markUsedFun(Procedure* fun, std::vector<Procedure*>& objFun) noexcept {
     // 防空指针且防止循环调用（A调B，B调A）导致的爆栈
     if (fun == nullptr || fun->isUsed) {
         return;
@@ -223,7 +223,7 @@ static void markUsedFun(Procedure* fun, std::vector<Procedure*>& objFun) {
     }
 }
 //----------------------------------------------------------------------------
-ObjectCode* generateObjectCode(IR_Program* program, int* err) {
+ObjectCode* generateObjectCode(IR_Program* program, int* err) noexcept {
     if (!program || !err) {
         if (err) *err = -1;
         return NULL;
@@ -320,7 +320,7 @@ ObjectCode* generateObjectCode(IR_Program* program, int* err) {
     return objCode;
 }
 static int getClassIndexByName(wchar_t* name, IR_Class** class_table,
-                               int class_table_size) {
+                               int class_table_size) noexcept {
     if (!name || !class_table) return -1;
     for (int i = 0; i < class_table_size; i++) {
         if (!class_table[i]) continue;
@@ -331,7 +331,7 @@ static int getClassIndexByName(wchar_t* name, IR_Class** class_table,
     return -1;
 }
 static int getVarSize(IR_DataType type, IR_Class** class_table,
-                      int class_table_size) {
+                      int class_table_size) noexcept {
     if (!class_table) return 0;
     switch (type.kind) {
     case IR_DT_INT:
@@ -357,12 +357,12 @@ static int generateStatement(int& index, FunCallPitchTable& pitchTable,
                              IR_Function* function,
                              SymbolTable& localeSymbolTable,
                              Procedure* proc,
-                             int* err);
+                             int* err) noexcept;
 Procedure* generateFunction(IR_Function* function,
                             FunCallPitchTable& pitchTable,
                             ConstantPool* constantPool,
                             IR_Function** all_functions, int all_function_count,
-                            int* err) {
+                            int* err) noexcept {
     if (!function || !err) {
         if (err) *err = -1;
         return NULL;
@@ -402,7 +402,7 @@ int generateStatement(int& index, FunCallPitchTable& pitchTable,
                       IR_Function* function,
                       SymbolTable& localeSymbolTable,
                       Procedure* proc,
-                      int* err) {
+                      int* err) noexcept {
     Token& currentToken = function->bodyTokens[index];
     if(currentToken.type == TOK_END) return 0;
     if (wcscmp(currentToken.value, L"ret") == 0 ||
@@ -670,7 +670,7 @@ int generateStatement(int& index, FunCallPitchTable& pitchTable,
 }
 void generateInstructionsFromAST(std::vector<Instruction>& instructions,
                                  int* inst_index, int* inst_size, ASTNode* node,
-                                 ConstantPool* constantPool, int* err) {
+                                 ConstantPool* constantPool, int* err) noexcept {
     if (!inst_index || !node || !inst_size || !err || !constantPool) {
         if (err) *err = -1;
         return;
@@ -857,7 +857,7 @@ void generateInstructionsFromAST(std::vector<Instruction>& instructions,
     (*inst_size)++;
     return;
 }
-extern void freeObjectCode(ObjectCode** obj) {
+extern void freeObjectCode(ObjectCode** obj) noexcept {
     if (!obj || !(*obj)) return;
     // 释放常量池
     if ((*obj)->constantPool.constants) {

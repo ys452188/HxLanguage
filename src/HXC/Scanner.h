@@ -12,7 +12,7 @@
   返回 0 成功，非 0 失败。
 */
 
-int readSourceFile(const char* path, wchar_t** src);
+int readSourceFile(FILE* fp, wchar_t** src) noexcept;
 /*
   将 UTF-8 字节序列解码为 UTF-16（wchar_t），适配 Windows (wchar_t == 2) 和 Unix
   (wchar_t == 4)：
@@ -20,7 +20,7 @@ int readSourceFile(const char* path, wchar_t** src);
   - 输出: *out 为 null 结尾的 wchar_t* （由函数 malloc 出来，调用者负责
   free），返回 0 成功，非 0 失败
 */
-static int utf8_to_wcs(const char* ptr, size_t len, wchar_t** out) {
+static int utf8_to_wcs(const char* ptr, size_t len, wchar_t** out) noexcept {
     if (!ptr || !out) return -1;
     *out = NULL;
     size_t i = 0;
@@ -137,12 +137,9 @@ static int utf8_to_wcs(const char* ptr, size_t len, wchar_t** out) {
   - src: 输出的 wchar_t* ，由函数分配，调用者负责 free。
   返回 0 成功，非 0 失败。
 */
-int readSourceFile(const char* path, wchar_t** src) {
-    if (!path || !src) return -1;
+int readSourceFile(FILE* fp, wchar_t** src) noexcept {
+    if (!fp || !src) return -1;
     *src = NULL;
-
-    FILE* fp = fopen(path, "rb");
-    if (!fp) return -1;
 
     if (fseek(fp, 0, SEEK_END) != 0) {
         fclose(fp);

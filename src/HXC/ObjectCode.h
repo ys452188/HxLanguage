@@ -100,9 +100,9 @@ typedef struct ObjectCode {
 } ObjectCode;
 //--------------------------------------
 // 写入目标代码
-extern int writeObjectCode(std::string path, ObjectCode& obj);
+extern int writeObjectCode(FILE* objFile, ObjectCode& obj)noexcept;
 
-static int writeHeader(FILE* file) {
+static int writeHeader(FILE* file) noexcept {
 #ifdef HX_DEBUG
     log(L"写入文件头");
 #endif
@@ -128,7 +128,7 @@ static int writeHeader(FILE* file) {
     |  value[1](u16)   |
     ..................
 *************************/
-static int writeWstring(const wchar_t* wstr, FILE* file) {
+static int writeWstring(const wchar_t* wstr, FILE* file)noexcept {
     if (!wstr) {
         uint32_t byteLen = 0;
         return fwrite(&byteLen, sizeof(byteLen), 1, file) == 1 ? 0 : -1;
@@ -144,7 +144,7 @@ static int writeWstring(const wchar_t* wstr, FILE* file) {
     }
     return 0;
 }
-static int writeParam(Param& param, FILE* file) {
+static int writeParam(Param& param, FILE* file) noexcept {
     // 写type
     char type = (char)(param.type);
     if (fwrite(&(type), sizeof(char), 1, file) != 1) return -1;
@@ -233,7 +233,7 @@ static int writeInstruction(Instruction& inst, FILE* file) {
     }
     return 0;
 }
-static int writeProcedure(Procedure& proc, FILE* file) {
+static int writeProcedure(Procedure& proc, FILE* file)noexcept {
     // 写instructionSize
     if (fwrite(&(proc.instructionSize), sizeof(uint32_t), 1, file) != 1)
         return -1;
@@ -247,8 +247,7 @@ static int writeProcedure(Procedure& proc, FILE* file) {
     if (fwrite(&(proc.localVarSize), sizeof(uint32_t), 1, file) != 1) return -1;
     return 0;
 }
-int writeObjectCode(std::string path, ObjectCode& obj) {
-    FILE* objFile = fopen(path.c_str(), "wb");
+int writeObjectCode(FILE* objFile, ObjectCode& obj)noexcept {
     if (!objFile) return -1;
     if (writeHeader(objFile)) return -1;
     // 写ConstantPoolSize

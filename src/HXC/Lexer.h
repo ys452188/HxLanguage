@@ -61,13 +61,13 @@ wchar_t* keyword[] = {  // 关键字
     L"私有成员",   L"受保护成员", L"public",     L"private", L"proctected",
     L"它的类型是", L"它的父类是", L"parent", L"repeat", L"循环",    NULL
 };
-static inline wchar_t* escape(const wchar_t* src);
-static inline bool isKeyword(wchar_t* str);  // 判断是否是关键字
-static inline bool isOperator(wchar_t ch);   // 判断是否是操作符
-Tokens* lex(wchar_t* src, int* err);         // 词法分析
-void freeTokens(Tokens** tokens);            // 释放
+static inline wchar_t* escape(const wchar_t* src) noexcept;
+static inline bool isKeyword(wchar_t* str) noexcept;  // 判断是否是关键字
+static inline bool isOperator(wchar_t ch) noexcept;   // 判断是否是操作符
+Tokens* lex(wchar_t* src, int* err) noexcept;         // 词法分析
+void freeTokens(Tokens** tokens) noexcept;            // 释放
 
-Tokens* lex(wchar_t* src, int* err) {
+Tokens* lex(wchar_t* src, int* err) noexcept {
 #define MEM_FAIL \
   {              \
     *err = -1;   \
@@ -474,7 +474,7 @@ Tokens* lex(wchar_t* src, int* err) {
     return tokens;
 }
 
-static bool isKeyword(wchar_t* str) {
+static bool isKeyword(wchar_t* str) noexcept {
     if (str == NULL) return false;
     int index = 0;
     while (keyword[index] != NULL) {
@@ -483,7 +483,7 @@ static bool isKeyword(wchar_t* str) {
     }
     return false;
 }
-static bool isOperator(wchar_t ch) {
+static bool isOperator(wchar_t ch) noexcept {
     return (ch == L'+' || ch == L'-' || ch == L'*' || ch == L',' || ch == L'，' ||
             ch == L'/' || ch == L'=' || ch == L'\"' || ch == L'.' ||
             ch == L'\'' || ch == L'“' || ch == L'‘' || ch == L'’' || ch == L'”' ||
@@ -493,7 +493,7 @@ static bool isOperator(wchar_t ch) {
             ch == L'。' || ch == L'[' || ch == L'【' || ch == L']' ||
             ch == L'】' || ch == L':' || ch == L'：');
 }
-void freeTokens(Tokens** tokens) {
+void freeTokens(Tokens** tokens) noexcept {
 #ifdef HX_DEBUG
     log(L"释放tokens");
 #endif
@@ -661,14 +661,14 @@ void showTokens(Tokens* tokens) {
 #endif
 #include <wctype.h>
 
-static int hexValue(wchar_t c) {
+static int hexValue(wchar_t c) noexcept {
     if (c >= L'0' && c <= L'9') return c - L'0';
     if (c >= L'a' && c <= L'f') return c - L'a' + 10;
     if (c >= L'A' && c <= L'F') return c - L'A' + 10;
     return -1;
 }
 // 字符串转义
-wchar_t* escape(const wchar_t* src) {
+wchar_t* escape(const wchar_t* src) noexcept {
     if (!src) return NULL;
 
     size_t len = wcslen(src);

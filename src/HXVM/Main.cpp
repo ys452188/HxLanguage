@@ -3,7 +3,7 @@
 #define ERR_LABEL L"\33[1;31m[E]\33[0m"
 #define LOG_LABEL L"\33[1;33m[LOG]\33[0m"
 #define INFO_LABEL L"\33[1;34m[INFO]\33[0m"
-
+#define STACK_SIZE_MAX 6*1024*1024   //6MB栈
 #define CALL_DEPTH_MAX ((const unsigned int)2000)  // 允许递归调用的最多次数
 typedef unsigned char byte;
 void initLocale(void);
@@ -18,15 +18,19 @@ FILE* errorStream = NULL;
 
 #include "Interpreter.h"
 #include "ObjectReader.h"
-extern int interpret(ObjectCode&, int& err);
+extern int interpret(ObjectCode&, int& err) noexcept;
 int main(int argc, char** argv) {
     clock_t start, end;
     start = clock();
     initLocale();
     wprintf(INFO_LABEL L"开始\n");
     errorStream = stdout;
+    memoryAllocer = {};
     ObjectCode objCode = {};
-    if (readObjectCode("../out.hxo", objCode)) {
+    std::string path = "../out.hxo";
+    FILE* file = fopen(path.c_str(), "rb");
+    //读
+    if (readObjectCode(file, objCode)) {
         fwprintf(errorStream, ERR_LABEL L"打开文件时发生错误！\n");
         return -1;
     }
@@ -54,11 +58,7 @@ int main(int argc, char** argv) {
 }
 void initLocale(void) {
     // 设置Locale
-    if (!setlocale(LC_ALL, "zh_CN.UTF-8")) {
-        if (!setlocale(LC_ALL, "en_US.UTF-8")) {
-            setlocale(LC_ALL, "C.UTF-8");
-        }
-    }
+    setlocale(LC_ALL, "C.UTF-8");
     // 设置宽字符流的定向
     fwide(stdout, 1);  // 1 = 宽字符定向
     return;

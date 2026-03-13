@@ -42,7 +42,8 @@ int main(int argc, char* argv[]) {
     std::string path("../test.hxl");
     // 读取源文件
     wchar_t* src = NULL;
-    int scannerError = readSourceFile(path.c_str(), &src);
+    FILE* sourceFile = fopen(path.c_str(), "r");
+    int scannerError = readSourceFile(sourceFile, &src);
     if (scannerError) {
         fwprintf(outputStream, L"\33[31m[ERR]\33[0m在读取源文件时出错了！\n");
         fwprintf(outputStream, L"\33[31m[ERR]\33[0m编译失败。\n");
@@ -108,8 +109,9 @@ int main(int argc, char* argv[]) {
         freeIRProgram(&program);
         return -1;
     }
-
-    writeObjectCode(std::string("../out.hxo"), *objCode);
+    std::string objPath = "../out.hxo";
+    FILE* objFile = fopen(objPath.c_str(), "wb");
+    writeObjectCode(objFile, *objCode);
     freeIRProgram(&program);
     freeTokens(&tokens);
     freeObjectCode(&objCode);

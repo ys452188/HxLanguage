@@ -61,9 +61,9 @@ typedef struct ASTNode {
 
 extern ASTNode* parseExpression(Token* exp, int* index, int size,
                                 FunCallPitchTable& pitchTable,
-                                SymbolTable* table, int* err);
+                                SymbolTable* table, int* err) noexcept;
 
-void freeAST(ASTNode* node) {
+void freeAST(ASTNode* node) noexcept {
     if (!node) return;
     freeAST(node->left);
     freeAST(node->right);
@@ -72,28 +72,28 @@ void freeAST(ASTNode* node) {
         free(node->data.value.val.s);
     free(node);
 }
-static int getVarIndex(const wchar_t* name, SymbolTable* table) {
+static int getVarIndex(const wchar_t* name, SymbolTable* table)noexcept {
     for (uint32_t i = 0; i < table->var_size; i++) {
         if (wcscmp(table->var[i].name, name) == 0) return i;
     }
     return -1;
 }
-static int getPrec(HxTokenType t) {
+static int getPrec(HxTokenType t)noexcept {
     if (t == TOK_OPR_MUL || t == TOK_OPR_DIV) return 2;
     if (t == TOK_OPR_ADD || t == TOK_OPR_SUB) return 1;
     return 0;
 }
 static ASTNode* parsePrimary(Token* tokens, int* index, int size,
                              FunCallPitchTable& pitchTable, SymbolTable* table,
-                             int* err);
+                             int* err)noexcept;
 static ASTNode* parseExprRec(Token* tokens, int* index, int size,
                              FunCallPitchTable& pitchTable, SymbolTable* table,
-                             int* err, int min_prec);
+                             int* err, int min_prec)noexcept;
 
 // 解析数字、变量、括号
 static ASTNode* parsePrimary(Token* tokens, int* index, int size,
                              FunCallPitchTable& pitchTable, SymbolTable* table,
-                             int* err) {
+                             int* err) noexcept {
     if (*index >= size) {
         *err = 255;
         return NULL;
@@ -309,7 +309,7 @@ static ASTNode* parsePrimary(Token* tokens, int* index, int size,
     free(node);
     return NULL;
 }
-IR_DataType getResultTypeForBinaryOp(IR_DataType left, IR_DataType right) {
+IR_DataType getResultTypeForBinaryOp(IR_DataType left, IR_DataType right) noexcept {
     // 类型提升
     if (left.kind == IR_DT_STRING || right.kind == IR_DT_STRING) {
         IR_DataType res;
@@ -328,7 +328,7 @@ IR_DataType getResultTypeForBinaryOp(IR_DataType left, IR_DataType right) {
 // 优先级爬升
 ASTNode* parseExprRec(Token* tokens, int* index, int size,
                       FunCallPitchTable& pitchTable, SymbolTable* table,
-                      int* err, int min_prec) {
+                      int* err, int min_prec) noexcept {
     ASTNode* lhs = parsePrimary(tokens, index, size, pitchTable, table, err);
     if (*err != 0 || lhs == NULL) return lhs;
 
@@ -500,7 +500,7 @@ ASTNode* parseExprRec(Token* tokens, int* index, int size,
 }
 ASTNode* parseExpression(Token* exp, int* index, int size,
                          FunCallPitchTable& pitchTable, SymbolTable* table,
-                         int* err) {
+                         int* err)noexcept {
 #ifdef HX_DEBUG
     log(L"分析表达式...");
 #endif

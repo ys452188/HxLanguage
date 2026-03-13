@@ -1,3 +1,5 @@
+#ifndef HXLANG_SRC_HXVM_INTERPRETER_H
+#define HXLANG_SRC_HXVM_INTERPRETER_H
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -21,7 +23,8 @@ public:
             }
         }
     }
-    void* hxMalloc(const unsigned int size) {
+    void* hxMalloc(const unsigned int size) noexcept {
+        if(size == 0) return NULL;
 #ifdef HX_DEBUG
         wprintf(LOG_LABEL L"申请一块%u字节的内存\n", size);
 #endif
@@ -29,7 +32,7 @@ public:
         if(memory) this->heapMemoryBlocks.push_back(memory);
         return memory;
     }
-    void* hxRealloc(void* old, int oldSize, int newSize) {
+    void* hxRealloc(void* old, int oldSize, int newSize) noexcept {
         void* memory = realloc(old, newSize);
         if(!memory) return NULL;
         for(int i = 0; i < this->heapMemoryBlocks.size(); i++) {
@@ -40,10 +43,32 @@ public:
         }
         return memory;
     }
-
 };
-static thread_local HxMemoryAllocer memoryAllocer;
-static thread_local int callDepth = 0;
+alignas(64) static thread_local HxMemoryAllocer memoryAllocer;
+
+typedef struct Symbol Symbol;
+typedef struct CallFrame {  //栈帧
+    Procedure& proc;
+    int instIndex;   //解释到哪了
+    char* localVarData;
+    int dataPtr;   //指localVarData
+    std::vector<Symbol> localSymbol;
+} CallFrame;
+static int pushCallFrame(Procedure& proc, std::vector<CallFrame>& frames) {
+    CallFrame frame = {
+        proc,
+        0,
+        (char*)(memoryAllocer.hxMalloc(proc.stackSize))
+    };
+    if(frame.localVarData == NULL && proc.stackSize != 0) {
+        fwprintf(errorStream, ERR_LABEL "内存分配失败！\n");
+        return -1;
+    }
+    frame.localSymbol.reserve(proc.localVarSize);
+    frames.push_back(frame);
+    return 0;
+}
+
 #define OP_STACK_SIZE 512  // 操作数栈大小
 typedef enum OpStackType {
     TYPE_INT = 1,
@@ -67,14 +92,10 @@ typedef struct Symbol {
     void* address;
 } Symbol;
 
-static int interpretProcedure(Procedure& proc, OpStack& opStack,
-                              ObjectCode& obj, std::vector<char>& stack,
-                              int& usedStackSize,
-                              std::vector<Symbol>& localSymbol);
 static int interpretInstruction(Instruction& inst, OpStack& opStack,
-                                std::vector<char>& stack, int& usedStackSize,
-                                ObjectCode& obj, int& instIndex);
-int interpret(ObjectCode& obj, int& err) {
+                                char*& stack, int& usedStackSize,
+                                ObjectCode& obj, int& instIndex, int& frameTop, std::vector<CallFrame>& frames);
+int interpret(ObjectCode& obj, int& err) noexcept {
 #ifdef HX_DEBUG
     wprintf(LOG_LABEL L"开始解释\n");
 #endif
@@ -85,41 +106,21 @@ int interpret(ObjectCode& obj, int& err) {
         return -1;
     }
     Procedure& entry = obj.procedures.at(obj.start);
-    std::vector<char> stack(entry.stackSize);
-    int usedStackSize = 0;
-    std::vector<Symbol> localSymbol(entry.localVarSize);
+    std::vector<CallFrame> frames;
+    frames.reserve(512);
+    int frameTop = 0;
+    if(pushCallFrame(entry, frames) != 0) return -1;
     OpStack opStack = {};
-    if (interpretProcedure(entry, opStack, obj, stack, usedStackSize,
-                           localSymbol)) {
-        err = -1;
-        return -1;
+
+    while(!frames.empty()) {
+        if(interpretInstruction(frames.at(frameTop).proc.instructions.at(frames.at(frameTop).instIndex),
+                                opStack, frames.at(frameTop).localVarData, frames.at(frameTop).dataPtr,
+                                obj, frames.at(frameTop).instIndex, frameTop, frames)) return -1;
     }
+
     return 0;
 }
 
-int interpretProcedure(Procedure& proc, OpStack& opStack, ObjectCode& obj,
-                       std::vector<char>& stack, int& usedStackSize,
-                       std::vector<Symbol>& localSymbol) {
-    callDepth++;
-    if (callDepth > CALL_DEPTH_MAX) {
-        fwprintf(errorStream, ERR_LABEL L"递归调用过多导致的栈溢出\n");
-        return -1;
-    }
-#ifdef HX_DEBUG
-    wprintf(LOG_LABEL L"解释过程\n");
-#endif
-    uint32_t jmpTo = 0;
-    for (int i = 0; i < proc.instructionSize; i++) {
-#ifdef HX_DEBUG
-        wprintf(LOG_LABEL L"解释第%d指令\n", i);
-#endif
-        jmpTo = 0;
-        if (interpretInstruction(proc.instructions.at(i), opStack, stack,
-                                 usedStackSize, obj, i))
-            return -1;
-    }
-    return 0;
-}
 static inline int promoteNumeric(_OpStack& a, _OpStack& b) {
     // 只处理 int / float，其它类型交给上层报错
     if ((a.type != TYPE_INT && a.type != TYPE_FLOAT) ||
@@ -180,9 +181,10 @@ static inline int promoteNumeric(_OpStack& a, _OpStack& b) {
     }
     return 0;
 }
+
 int interpretInstruction(Instruction& inst, OpStack& opStack,
-                         std::vector<char>& stack, int& usedStackSize,
-                         ObjectCode& obj, int& instIndex) {
+                         char*& stack, int& usedStackSize,
+                         ObjectCode& obj, int& instIndex, int& frameTop, std::vector<CallFrame>& frames) {
 #ifdef HX_DEBUG
     // wprintf(LOG_LABEL L"__________________________________________\n");
 #endif
@@ -379,21 +381,22 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
         int32_t procAddr = 0;
         memcpy(&procAddr, inst.params[0].value, sizeof(int32_t));
         Procedure& proc = (obj.procedures.at(procAddr));
-        std::vector<char> localStack(proc.stackSize);
-        std::vector<Symbol> localSymbol(proc.localVarSize);
         if (opStack.top < argCount) {
             fwprintf(errorStream, ERR_LABEL L"参数不够\n");
             return -1;
         }
+
+        //插入栈帧
+        if(pushCallFrame(proc, frames) != 0) return -1;
+        frameTop++;
+
         int localSymbolTop = argCount - 1;
-        int usedStackSize = 0;
         for (int i = opStack.top - 1; i >= opStack.top - argCount; i--) {
-            localSymbol[localSymbolTop--].type = opStack.opStack[i].type;
-            usedStackSize += opStack.opStack[i].size;
+            frames.at(frameTop).localSymbol[localSymbolTop--].type = opStack.opStack[i].type;
+            frames.at(frameTop).dataPtr += opStack.opStack[i].size;
         }
-        if (interpretProcedure(proc, opStack, obj, localStack, usedStackSize,
-                               localSymbol))
-            return -1;
+        instIndex++;
+        return 0;
         break;
     }
     case OP_PRINT_STRING: {
@@ -409,6 +412,8 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
 #ifdef HX_DEBUG
         wprintf(LOG_LABEL L"__________________________________________\n");
 #endif
+        frames.pop_back();
+        frameTop--;
         return 0;
         break;
     }
@@ -535,12 +540,14 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
         }
         uint32_t instAddr = 0;
         memcpy(&instAddr, inst.params[0].value, sizeof(uint32_t));
-        instIndex = (int)instAddr-1;   //for末尾有i++;
+        instIndex = (int)instAddr;
         return 0;
     }
     }
 #ifdef HX_DEBUG
     wprintf(LOG_LABEL L"__________________________________________\n");
 #endif
+    frames.at(frameTop).instIndex++;
     return 0;
 }
+#endif

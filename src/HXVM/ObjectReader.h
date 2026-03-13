@@ -140,8 +140,7 @@ static int readInstruction(Instruction& instr, FILE* file) {
     }
     return 0;
 }
-int readObjectCode(std::string path, ObjectCode& obj) {
-    FILE* file = fopen(path.c_str(), "rb");
+int readObjectCode(FILE* file, ObjectCode& obj) {
     if (!file) return -1;
 
     //验证头信息 "HXOC"
