@@ -1,5 +1,5 @@
 # ⚠️ 警告：这是一个连开发者都不敢保证明天能跑起来的玩具
-# HxLanguage
+# HxHLanguage
 ---
 这是一个由 C++ 编写(早期用C,由于我发现C++的vector、string、thread、new、折构比C更好玩，所以改用C++，但仍有C风格)的虚拟机及编译器 HXC。
 ---
@@ -19,7 +19,7 @@ mkdir -p build
 cd build
 cmake ..
 make -j2
-# 如果你想看它疯狂输出调试信息
+./hxc
 ./hxvm
 ```
 如果你打算把它用到生产环境，那你是个人物

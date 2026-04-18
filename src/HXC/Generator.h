@@ -1,5 +1,5 @@
-#ifndef HXLANG_SRC_HXC_GENERATOR_H
-#define HXLANG_SRC_HXC_GENERATOR_H
+#ifndef HXHLANG_SRC_HXC_GENERATOR_H
+#define HXHLANG_SRC_HXC_GENERATOR_H
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

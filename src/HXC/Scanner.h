@@ -1,5 +1,5 @@
-#ifndef HXLANG_SCANNER_H
-#define HXLANG_SCANNER_H
+#ifndef HXHLANG_SRC_HXC_SCANNER_H
+#define HXHLANG_SRC_HXC_SCANNER_H
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

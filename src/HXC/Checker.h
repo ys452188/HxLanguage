@@ -1,5 +1,5 @@
-#ifndef HXLANG_SRC_HXC_CHECKER_H
-#define HXLANG_SRC_HXC_CHECKER_H
+#ifndef HXHLANG_SRC_HXC_CHECKER_H
+#define HXHLANG_SRC_HXC_CHECKER_H
 #include <wchar.h>
 /**
  * 在分析到新函数时检查函数是否重复定义，包含对错误的处理

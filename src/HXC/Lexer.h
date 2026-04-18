@@ -1,5 +1,5 @@
-#ifndef HX_LEXER_H
-#define HX_LEXER_H
+#ifndef HXHLANG_SRC_HXC_LEXER_H
+#define HXHLANG_SRC_HXC_LEXER_H
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>

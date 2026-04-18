@@ -1,4 +1,5 @@
 #define HX_DEBUG
+
 #define HXVM_VERSION 0.114f
 #define ERR_LABEL L"\33[1;31m[E]\33[0m"
 #define LOG_LABEL L"\33[1;33m[LOG]\33[0m"
@@ -7,14 +8,15 @@
 #define CALL_DEPTH_MAX ((const unsigned int)2000)  // 允许递归调用的最多次数
 typedef unsigned char byte;
 void initLocale(void);
+#include "HxVector.h"
 #include <locale.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <time.h>
+#define errorStream stdout
 
 #include <iostream>
 #include <thread>
-FILE* errorStream = NULL;
 
 #include "Interpreter.h"
 #include "ObjectReader.h"
@@ -24,8 +26,8 @@ int main(int argc, char** argv) {
     start = clock();
     initLocale();
     wprintf(INFO_LABEL L"开始\n");
-    errorStream = stdout;
-    memoryAllocer = {};
+
+    memoryAllocer;
     ObjectCode objCode = {};
     std::string path = "../out.hxo";
     FILE* file = fopen(path.c_str(), "rb");
@@ -50,6 +52,7 @@ int main(int argc, char** argv) {
                  (double)(end - start) / CLOCKS_PER_SEC);
         return -1;
     }
+    freeObjectCode(objCode);
 
     end = clock();
     wprintf(INFO_LABEL L"结束 耗时%lfs\n",

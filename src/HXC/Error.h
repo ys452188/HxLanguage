@@ -1,5 +1,5 @@
-#ifndef HX_ERROR_H
-#define HX_ERROR_H
+#ifndef HXHLANG_SRC_HXC_ERROR_H
+#define HXHLANG_SRC_HXC_ERROR_H
 #include <locale.h>
 #include <stdio.h>
 #include <wchar.h>

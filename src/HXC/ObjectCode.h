@@ -1,5 +1,5 @@
-#ifndef HXLANG_SRC_HXC_OBJECTCODE_H
-#define HXLANG_SRC_HXC_OBJECTCODE_H
+#ifndef HXHLANG_SRC_HXC_OBJECTCODE_H
+#define HXHLANG_SRC_HXC_OBJECTCODE_H
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>

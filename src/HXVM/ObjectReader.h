@@ -1,12 +1,12 @@
-#ifndef HXLANG_SRC_HXVM_OBJECT_READER_H
-#define HXLANG_SRC_HXVM_OBJECT_READER_H
+#ifndef HXHLANG_SRC_HXVM_OBJECT_READER_H
+#define HXHLANG_SRC_HXVM_OBJECT_READER_H
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
 
 #include <string>
-#include <vector>
+#include "HxVector.h"
 typedef uint8_t Opcode;
 enum {
     OP_NOP = 0,
@@ -59,7 +59,7 @@ typedef struct Instruction {
 // 过程,用索引访问
 typedef struct Procedure {
     uint32_t instructionSize;
-    std::vector<Instruction> instructions;
+    HxVector<Instruction> instructions;
     uint32_t stackSize;     // 栈大小
     uint32_t localVarSize;  // 局部变量数量
 } Procedure;
@@ -90,7 +90,7 @@ typedef struct ObjectCode {
     ObjectCodeHeader header;
     ConstantPool constantPool;
     uint32_t procedureSize;
-    std::vector<Procedure> procedures;
+    HxVector<Procedure> procedures;
     int32_t start;  // 入口索引
 } ObjectCode;
 
@@ -185,9 +185,9 @@ int readObjectCode(FILE* file, ObjectCode& obj) {
         }
         obj.constantPool.constants[i].type = (ConstantType)typeChar;
         if (obj.constantPool.constants[i].type == CONST_STRING) {
-            // 这里将 u16 序列读入并转为 wchar_t*
+            // 将 u16 序列读入并转为 wchar_t*
             obj.constantPool.constants[i].value.string_value = readWstring(file);
-            // 重新记录当前平台的真实字节大小（可选）
+            // 重新记录当前平台的真实字节大小
             if (obj.constantPool.constants[i].value.string_value) {
                 obj.constantPool.constants[i].size =
                     (uint32_t)(wcslen(
@@ -196,15 +196,16 @@ int readObjectCode(FILE* file, ObjectCode& obj) {
             }
         }
     }
-    // 3.读取过程
+    // 读取过程
     uint32_t procCount;
     if (fread(&procCount, sizeof(uint32_t), 1, file) != 1) {
         fclose(file);
         return -1;
     }
     obj.procedureSize = procCount;
+    obj.procedures.resize(procCount);
     for (uint32_t i = 0; i < procCount; i++) {
-        Procedure proc;
+        Procedure& proc = obj.procedures[i];
         if (fread(&(proc.instructionSize), sizeof(uint32_t), 1, file) != 1) {
             fclose(file);
             return -1;
@@ -221,14 +222,28 @@ int readObjectCode(FILE* file, ObjectCode& obj) {
         if (fread(&(proc.stackSize), sizeof(uint32_t), 1, file) != 1) break;
         if (fread(&(proc.localVarSize), sizeof(uint32_t), 1, file) != 1) break;
 
-        obj.procedures.push_back(proc);
     }
-    // 4.读取入口
+    //读取入口
     if (fread(&(obj.start), sizeof(uint32_t), 1, file) != 1) {
         fclose(file);
         return -1;
     }
     fclose(file);
     return 0;
+}
+void freeObjectCode(ObjectCode& obj) {
+    // 释放常量池里的每个字符串
+    if (obj.constantPool.constants != nullptr) {
+        for (uint32_t i = 0; i < obj.constantPool.size; i++) {
+            if (obj.constantPool.constants[i].type == CONST_STRING) {
+                if (obj.constantPool.constants[i].value.string_value != nullptr) {
+                    free(obj.constantPool.constants[i].value.string_value);
+                }
+            }
+        }
+        free(obj.constantPool.constants);
+        obj.constantPool.constants = nullptr;
+    }
+    return;
 }
 #endif

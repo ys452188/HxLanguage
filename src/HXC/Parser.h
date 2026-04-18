@@ -1,5 +1,5 @@
-#ifndef HX_PARSER_H
-#define HX_PARSER_H
+#ifndef HXHLANG_SRC_HXC_PARSER_H
+#define HXHLANG_SRC_HXC_PARSER_H
 
 #include <stdbool.h>
 #include <stdlib.h>
