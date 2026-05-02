@@ -1,0 +1,155 @@
+#pragma once
+typedef struct Instruction Instruction;
+typedef struct Token Token;
+typedef enum IR_DataTypeKind {
+    IR_DT_INT,
+    IR_DT_FLOAT,
+    IR_DT_STRING,
+    IR_DT_CHAR,
+    IR_DT_BOOL,
+    IR_DT_INT_ARR,  // 数组
+    IR_DT_FLOAT_ARR,
+    IR_DT_STRING_ARR,
+    IR_DT_CHAR_ARR,
+    IR_DT_BOOL_ARR,
+    IR_DT_CUSTOM_ARR,
+    IR_DT_INT_REFER,  // 引用类型
+    IR_DT_FLOAT_REFER,
+    IR_DT_STRING_REFER,
+    IR_DT_CHAR_REFER,
+    IR_DT_BOOL_REFER,
+    IR_DT_CUSTOM_REFER,
+    IR_DT_VOID,
+    IR_DT_CUSTOM
+} IR_DataTypeKind;
+typedef struct IR_DataType {
+    IR_DataTypeKind kind;
+    wchar_t* customTypeName;  // 当kind为IR_DT_CUSTOM 时使用
+} IR_DataType;
+//-----------------------------------------------------------
+
+typedef struct Procedure Procedure;
+typedef struct IR_FunctionParam {
+    wchar_t* name;
+    IR_DataType type;
+} IR_FunctionParam;
+class FunCallPitch;
+typedef struct IR_Function {
+    wchar_t* name;
+    IR_FunctionParam* params;
+    int paramCount;
+    bool isReturnTypeKnown;
+    IR_DataType returnType;
+    Token* bodyTokens;  // 函数体的Token流
+    int body_token_count;
+    bool isUsed;  // 标记该函数是否被使用过
+
+    FunCallPitch* pitch;
+    Procedure* proc;
+} IR_Function;
+//-------------------------------------------------------------
+typedef struct IR_Variable {
+    wchar_t* name;
+    IR_DataType type;
+    bool isTypeKnown;
+    bool isOnlyRead;
+    int address;  // 变量在符号号表中的地址
+} IR_Variable;
+//-------------------------------------------------------------
+typedef union IR_ClassMemberData {
+    IR_Variable* variable;
+    IR_Function* function;
+} IR_ClassMemberData;
+enum IR_ClassMemberType { IR_CM_VARIABLE, IR_CM_FUNCTION };
+typedef struct IR_ClassMember {
+    IR_ClassMemberType type;
+    IR_ClassMemberData data;
+} IR_ClassMember;
+typedef struct IR_ClassBody {
+    IR_ClassMember* publicMembers;
+    int public_member_count;
+    IR_ClassMember* privateMembers;
+    int private_member_count;
+    IR_ClassMember* protectedMembers;
+    int protected_member_count;
+} IR_ClassBody;
+typedef struct IR_Class {
+    int line;  // 类定义所在行号
+    wchar_t* name;
+    wchar_t* parent_name;  // 父类名
+    int fatherIndex;       // 父类在类表中的索引，-1表示无父类
+
+    IR_ClassBody body;
+
+    int size;  // 类的大小，单位：字节
+} IR_Class;
+//---------------------------------------------------------------
+typedef struct IR_Program {
+    IR_Variable** global_variables;
+    int global_variable_count;
+    IR_Function** functions;
+    int function_count;
+    IR_Class** classes;
+    int class_count;
+} IR_Program;
+
+// 变量处理：存储各变量与其对应的指令，用于回填、标记是否有用
+class Symbol {
+public:
+    bool isUsed;
+    wchar_t* name;
+    bool isTypeKnown;
+    IR_DataType type;
+    int instIndex;
+    int procIndex;
+
+    ~Symbol() {
+        //free(name);
+        name = nullptr;
+    }
+};
+
+typedef struct SymbolTable {
+    IR_Function** fun;  // 函数表（数组）
+    uint32_t fun_size;
+    std::vector<Symbol> vars;
+    uint32_t var_size;
+} SymbolTable;
+class FunCallPitch {  // 回填CALL指令,被指向
+public:
+    FunCallPitch(IR_Function* ir_fun) noexcept : fun(ir_fun) {}
+    IR_Function* fun;
+    int index;
+};
+class FunCallPitchTable {
+    std::vector<FunCallPitch*> pitches;
+
+public:
+    FunCallPitch* enter(IR_Function* fun) {
+        for (int i = 0; i < pitches.size(); i++) {
+            if (pitches.at(i)->fun == fun) return pitches.at(i);
+        }
+        FunCallPitch* pitch = new (std::nothrow) FunCallPitch(fun);
+        if (pitch == nullptr) return NULL;
+        pitches.push_back(pitch);
+        return pitch;
+    }
+#ifdef HX_DEBUG
+    void list() {
+        fwprintf(logStream, L"回填函数列表：\n");
+        for (int i = 0; i < pitches.size(); i++) {
+            fwprintf(logStream, L"\t%03u\33[1;32m%ls\33[0m index:%d\n", i,
+                     pitches.at(i)->fun->name, pitches.at(i)->index);
+        }
+    }
+#endif
+    ~FunCallPitchTable() {
+        for (int i = 0; i < pitches.size(); i++) {
+#ifdef HX_DEBUG
+            fwprintf(logStream, L"释放：%ls\n", pitches.at(i)->fun->name);
+#endif
+            if (pitches.at(i) != NULL) delete pitches.at(i);
+            pitches.at(i) = NULL;
+        }
+    }
+};

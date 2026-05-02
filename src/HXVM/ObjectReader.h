@@ -6,25 +6,28 @@
 #include <wchar.h>
 
 #include <string>
+
 #include "HxVector.h"
 typedef uint8_t Opcode;
 enum {
     OP_NOP = 0,
-    OP_LOAD_CONST,  // 加载常量至栈顶 OP_LOAD_CONST <param_value> | OP_LOAD_CONST
-    // <const_index>
+    OP_LOAD_CONST,  // 加载常量至栈顶 OP_LOAD_CONST <paramType> <paramValue> |
+    // OP_LOAD_CONST <constantIndex>
     OP_LOAD_VAR,   // 加载变量至栈顶
-    OP_POP,
+    OP_POP,        // 弹出
     OP_STORE_VAR,  // 将栈顶值存入变量
+    OP_DEF_VAR,    // 为变量开辟内存空间 OP_DEF_VAR <memorySize(u32)>
     OP_ADD,
     OP_SUB,
     OP_MUL,
     OP_DIV,
     OP_JMP,
-    OP_JMP_CONDITION,
-    OP_CAL,  // CAL <proc_index>(u32) <paramCount>(u32)
+    OP_JMP_CONDITION,  // JMP_CONDITION <栈顶为真时跳转的地址>
+    // <为假时跳转的地址(>size时跳转至末尾)>
+    OP_CAL,            // CAL <procIndex>(u32) <paramCount>(u32)
     OP_RET,
     OP_PRINT_STRING,
-    //类型转换
+    // 类型转换
     OP_CHAR_TO_INT,
     OP_INT_TO_CHAR,
     OP_INT_TO_FLOAT,
@@ -32,8 +35,8 @@ enum {
     OP_CHAR_TO_STRING,
     OP_FLOAT_TO_INT,
     OP_INT_TO_STRING,
-    //连接字符串
-    OP_STRING_CONCAT
+    // 连接字符串
+    OP_STRING_CONCAT,
 };
 typedef uint8_t ParamType;
 enum {
@@ -94,7 +97,7 @@ typedef struct ObjectCode {
     int32_t start;  // 入口索引
 } ObjectCode;
 
-static wchar_t* readWstring(FILE* file) {
+inline static wchar_t* readWstring(FILE* file) {
     uint32_t byteLen;
     if (fread(&byteLen, sizeof(byteLen), 1, file) != 1) return nullptr;
     if (byteLen == 0) return nullptr;
@@ -123,7 +126,7 @@ static wchar_t* readWstring(FILE* file) {
     return wstr;
 }
 // 读取指令
-static int readInstruction(Instruction& instr, FILE* file) {
+inline static int readInstruction(Instruction& instr, FILE* file) {
     // 读取 Opcode
     if (fread(&(instr.opcode), sizeof(Opcode), 1, file) != 1) return -1;
     // 读取 3 个参数
@@ -140,10 +143,10 @@ static int readInstruction(Instruction& instr, FILE* file) {
     }
     return 0;
 }
-int readObjectCode(FILE* file, ObjectCode& obj) {
+inline int readObjectCode(FILE* file, ObjectCode& obj) {
     if (!file) return -1;
 
-    //验证头信息 "HXOC"
+    // 验证头信息 "HXOC"
     char magic[4];
     if (fread(magic, 1, 4, file) != 4) {
         fclose(file);
@@ -159,8 +162,9 @@ int readObjectCode(FILE* file, ObjectCode& obj) {
         fclose(file);
         return -1;
     }
-    if(version > HXVM_VERSION) {
-        fwprintf(errorStream, ERR_LABEL L"本虚拟机版本过低，文件要求：%f\n", version);
+    if (version > HXVM_VERSION) {
+        fwprintf(errorStream, ERR_LABEL L"本虚拟机版本过低，文件要求：%f\n",
+                 version);
         fclose(file);
         return -1;
     }
@@ -170,7 +174,7 @@ int readObjectCode(FILE* file, ObjectCode& obj) {
         return -1;
     }
 
-    //读取常量池
+    // 读取常量池
     if (fread(&(obj.constantPool.size), sizeof(uint32_t), 1, file) != 1) {
         fclose(file);
         return -1;
@@ -221,9 +225,8 @@ int readObjectCode(FILE* file, ObjectCode& obj) {
         // 读取运行栈和局部变量配置
         if (fread(&(proc.stackSize), sizeof(uint32_t), 1, file) != 1) break;
         if (fread(&(proc.localVarSize), sizeof(uint32_t), 1, file) != 1) break;
-
     }
-    //读取入口
+    // 读取入口
     if (fread(&(obj.start), sizeof(uint32_t), 1, file) != 1) {
         fclose(file);
         return -1;
@@ -231,7 +234,7 @@ int readObjectCode(FILE* file, ObjectCode& obj) {
     fclose(file);
     return 0;
 }
-void freeObjectCode(ObjectCode& obj) {
+inline void freeObjectCode(ObjectCode& obj) {
     // 释放常量池里的每个字符串
     if (obj.constantPool.constants != nullptr) {
         for (uint32_t i = 0; i < obj.constantPool.size; i++) {

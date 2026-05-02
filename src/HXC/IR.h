@@ -7,99 +7,8 @@
 
 #include "Error.h"
 #include "Lexer.h"
+#include "SymbolTable.h"
 class FunCallPitch;
-
-typedef enum IR_DataTypeKind {
-    IR_DT_INT,
-    IR_DT_FLOAT,
-    IR_DT_STRING,
-    IR_DT_CHAR,
-    IR_DT_BOOL,
-    IR_DT_INT_ARR,  // 数组
-    IR_DT_FLOAT_ARR,
-    IR_DT_STRING_ARR,
-    IR_DT_CHAR_ARR,
-    IR_DT_BOOL_ARR,
-    IR_DT_CUSTOM_ARR,
-    IR_DT_INT_REFER,  // 引用类型
-    IR_DT_FLOAT_REFER,
-    IR_DT_STRING_REFER,
-    IR_DT_CHAR_REFER,
-    IR_DT_BOOL_REFER,
-    IR_DT_CUSTOM_REFER,
-    IR_DT_VOID,
-    IR_DT_CUSTOM
-} IR_DataTypeKind;
-typedef struct IR_DataType {
-    IR_DataTypeKind kind;
-    wchar_t* customTypeName;  // 当kind为IR_DT_CUSTOM 时使用
-} IR_DataType;
-//-----------------------------------------------------------
-typedef struct Procedure Procedure;
-typedef struct IR_FunctionParam {
-    wchar_t* name;
-    IR_DataType type;
-} IR_FunctionParam;
-
-typedef struct IR_Function {
-    wchar_t* name;
-    IR_FunctionParam* params;
-    int paramCount;
-    bool isReturnTypeKnown;
-    IR_DataType returnType;
-    Token* bodyTokens;  // 函数体的Token流
-    int body_token_count;
-    bool isUsed;  // 标记该函数是否被使用过
-
-    FunCallPitch* pitch;
-    Procedure* proc;
-} IR_Function;
-//-------------------------------------------------------------
-typedef struct IR_Variable {
-    wchar_t* name;
-    IR_DataType type;
-    bool isTypeKnown;
-    bool isOnlyRead;
-    int address;  // 变量在符号号表中的地址
-} IR_Variable;
-//-------------------------------------------------------------
-typedef union IR_ClassMemberData {
-    IR_Variable* variable;
-    IR_Function* function;
-} IR_ClassMemberData;
-enum IR_ClassMemberType { IR_CM_VARIABLE, IR_CM_FUNCTION };
-typedef struct IR_ClassMember {
-    IR_ClassMemberType type;
-    IR_ClassMemberData data;
-} IR_ClassMember;
-typedef struct IR_ClassBody {
-    IR_ClassMember* publicMembers;
-    int public_member_count;
-    IR_ClassMember* privateMembers;
-    int private_member_count;
-    IR_ClassMember* protectedMembers;
-    int protected_member_count;
-} IR_ClassBody;
-typedef struct IR_Class {
-    int line;  // 类定义所在行号
-    wchar_t* name;
-    wchar_t* parent_name;  // 父类名
-    int fatherIndex;       // 父类在类表中的索引，-1表示无父类
-
-    IR_ClassBody body;
-
-    int size;  // 类的大小，单位：字节
-} IR_Class;
-//---------------------------------------------------------------
-typedef struct IR_Program {
-    IR_Variable** global_variables;
-    int global_variable_count;
-    IR_Function** functions;
-    int function_count;
-    IR_Class** classes;
-    int class_count;
-} IR_Program;
-
 #include "Checker.h"
 #ifdef HX_DEBUG
 void showFunctionInfo(IR_Function* function);
@@ -110,30 +19,31 @@ void showFunctionInfo(IR_Function* function);
  * @param index 当前解析到的Token索引，解析完成后会更新为下一个未解析的Token索引
  * @param err 错误码指针，发生错误时会设置为相应错误码
  */
-IR_Function* parseFunction(Tokens* tokens, int* index, int* err)noexcept;
+IR_Function* parseFunction(Tokens* tokens, int* index, int* err);
 /**
  * 解析类定义
  * @param tokens 词法分析得到的Token流
  * @param index 当前解析到的Token索引，解析完成后会更新为下一个未解析的Token索引
  * @param err 错误码指针，发生错误时会设置为相应错误码
  */
-IR_Class* parseClass(Tokens* tokens, int* index, int* err)noexcept;
+IR_Class* parseClass(Tokens* tokens, int* index, int* err);
 /** 生成中间表示
  * @param tokens 词法分析得到的Token流
  * @param err 错误码指针，发生错误时会设置为相应错误码
  */
-IR_Program* generateIR(Tokens* tokens, int* err)noexcept;  // 生成中间表示
+IR_Program* generateIR(Tokens* tokens, int* err);  // 生成中间表示
 /** 解析全局或类中的变量定义(不能赋初值)
  * @param tokens 词法分析得到的Token流
  * @param index 当前解析到的Token索引，解析完成后会更新为下一个未解析的Token索引
  * @param err 错误码指针，发生错误时会设置为相应错误码
  */
-IR_Variable* parseGlobalOrClassVariable(Tokens* tokens, int* index, int* err)noexcept;
+IR_Variable* parseGlobalOrClassVariable(Tokens* tokens, int* index, int* err);
 /*释放IR*/
-void freeIRProgram(IR_Program** program) noexcept;
-static int getClassSize(IR_Class* cls, IR_Program*)noexcept;
+void freeIRProgram(IR_Program** program);
+bool checkEachClass(IR_Class* cls, IR_Program* currentIRProgram, std::vector<IR_Class*> lastClasses);
+static int getClassSize(IR_Class* cls, IR_Program*);
 //----------------------------------------------------------------------------------------------
-IR_Program* generateIR(Tokens* tokens, int* err) noexcept {
+IR_Program* generateIR(Tokens* tokens, int* err) {
     if (!tokens) {
         if (err) *err = -1;
         return NULL;
@@ -276,10 +186,9 @@ IR_Program* generateIR(Tokens* tokens, int* err) noexcept {
          */
         if (index == old_index) {
 #ifdef HX_DEBUG
-            // debug: 输出当前的token信息到stderr，说明解析器未推进
             fwprintf(stderr,
-                     L"[DBG] generateIR: no progress at index=%d type=%d line=%d "
-                     L"value_ptr=%p\n",
+                     L"[DBG] index=%d type=%d line=%d "
+                     L"valuePtr=%p\n",
                      index, tokens->tokens[index].type, tokens->tokens[index].line,
                      (void*)tokens->tokens[index].value);
 #endif
@@ -291,13 +200,19 @@ IR_Program* generateIR(Tokens* tokens, int* err) noexcept {
             return NULL;
         }
     }
-    // 设置类大小
+    // 设置类大小、检查是否包含
     for (int i = 0; i < program->class_count; i++) {
+        std::vector<IR_Class*> checkedClasses;
+        if(checkEachClass(program->classes[i], program, checkedClasses)) {
+            setError(ERROR_UNCOMPLETED_CLASS, program->classes[i]->line, NULL);
+            *err = 255;
+            return NULL;
+        }
         program->classes[i]->size = getClassSize(program->classes[i], program);
     }
     return program;
 }
-void freeIRProgram(IR_Program** program)noexcept {
+void freeIRProgram(IR_Program** program) {
     if (!program || !*program) return;
     if (*program) {
         // 释放程序中的所有函数
@@ -530,7 +445,7 @@ static IR_DataType parseDataTypeByString(wchar_t* typeStr) noexcept {
     }
     return dt;
 }
-IR_DataType parseDataType(Tokens* tokens, int* index, int size, int* err) noexcept {
+IR_DataType parseDataType(Tokens* tokens, int* index, int size, int* err) {
     IR_DataType dt = {};
     if (!tokens || !index || size < 1) {
         *err = -1;
@@ -592,7 +507,7 @@ IR_DataType parseDataType(Tokens* tokens, int* index, int size, int* err) noexce
 }
 // 定义变量::= 变量:标识符[,它的类型是:数据类型];
 static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index,
-        int* err, bool isOnlyRead)noexcept {
+        int* err, bool isOnlyRead) {
     if (!tokens || !index || !err) {
         if (err) *err = -1;
         return NULL;
@@ -693,7 +608,7 @@ static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index,
         }
         (*index)++;
         // 数据类型
-        if (tokens->tokens[*index].type != TOK_ID) {
+        if (tokens->tokens[*index].type != TOK_ID && tokens->tokens[*index].type != TOK_KW) {
             *err = 255;  // 语法错误
             setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
             free(var->name);
@@ -746,7 +661,7 @@ static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index,
 }
 // 定义变量::= var:标识符[:数据类型];
 static IR_Variable* parseGlobalOrClassVariable_EN(Tokens* tokens, int* index,
-        int* err, bool isOnlyRead) noexcept {
+        int* err, bool isOnlyRead) {
     if (!tokens || !index || !err) {
         if (err) *err = -1;
         return NULL;
@@ -790,7 +705,7 @@ static IR_Variable* parseGlobalOrClassVariable_EN(Tokens* tokens, int* index,
 #ifdef HX_DEBUG
     log(L"已解析变量名(\"%ls\")", var->name);
 #endif
-    // 类型 ->
+    // 类型
     if (*index + 1 >= tokens->count) {
         *err = 255;  // 语法错误
         setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
@@ -810,7 +725,7 @@ static IR_Variable* parseGlobalOrClassVariable_EN(Tokens* tokens, int* index,
             return NULL;
         }
         (*index)++;
-        if (tokens->tokens[*index].type != TOK_ID) {
+        if (tokens->tokens[*index].type != TOK_ID && tokens->tokens[*index].type != TOK_KW) {
             *err = 255;  // 语法错误
             setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
             free(var->name);
@@ -860,7 +775,7 @@ static IR_Variable* parseGlobalOrClassVariable_EN(Tokens* tokens, int* index,
     (*index)++;
     return var;
 }
-IR_Variable* parseGlobalOrClassVariable(Tokens* tokens, int* index, int* err) noexcept {
+IR_Variable* parseGlobalOrClassVariable(Tokens* tokens, int* index, int* err) {
     if (!tokens || !index || !err) {
         if (err) *err = -1;
         return NULL;
@@ -1015,7 +930,7 @@ static IR_FunctionParam* parseFunctionParams(Tokens* tokens, int* index,
     return params;
 }
 // 函数定义::= 函数:标识符(参数列表)[,它的返回类型是:数据类型]{函数体}
-static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err)noexcept {
+static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
     if ((*index + 1) >= tokens->count) {
         *err = 255;  // 语法错误
         setError(ERR_FUN, tokens->tokens[*index].line, NULL);
@@ -1308,7 +1223,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err)noexce
     return function;
 }
 // 函数定义::= function:标识符(参数列表)[:数据类型]->{函数体}
-static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) noexcept {
+static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) {
     if (!tokens || !index) {
         if (err) *err = -1;
         return NULL;
@@ -1561,7 +1476,7 @@ static IR_Function* parseFunction_EN(Tokens* tokens, int* index, int* err) noexc
 // 定义函数::= fun:标识符(参数列表)->数据类型 { 函数体 }
 // 定义函数::= 定义函数:标识符(参数列表)
 // [，它的返回类型是：数据类型]|[，它没有返回类型] { 函数体 }
-IR_Function* parseFunction(Tokens* tokens, int* index, int* err) noexcept {
+IR_Function* parseFunction(Tokens* tokens, int* index, int* err) {
     if (!tokens || !index) {
         if (err) *err = -1;
         return NULL;
@@ -1879,7 +1794,7 @@ void showIRProgramInfo(IR_Program* program) {
  * @return 解析得到的类体结构体(不是指针)
  */
 static IR_ClassBody parseClassBody(Tokens* tokens, int start_index,
-                                   int end_index, int* err)noexcept {
+                                   int end_index, int* err) {
     if (!tokens || err == NULL) {
         if (err) *err = -1;
         IR_ClassBody body = {0};
@@ -1997,7 +1912,7 @@ static IR_ClassBody parseClassBody(Tokens* tokens, int start_index,
             }
             log(L"解析到类的函数成员：%ls  (%ls)", func->name, access);
 #endif
-            index++;
+            //index++;
         } else if (wcscmp(tokens->tokens[index].value, L"var") == 0 ||
                    wcscmp(tokens->tokens[index].value, L"定义变量") == 0 ||
                    wcscmp(tokens->tokens[index].value, L"con") == 0 ||
@@ -2023,7 +1938,7 @@ static IR_ClassBody parseClassBody(Tokens* tokens, int start_index,
             }
             log(L"解析到类的变量成员：%ls (%ls)", var->name, access);
 #endif
-            index++;
+            //index++;
         }
     }
     return body;
@@ -2035,7 +1950,7 @@ static IR_ClassBody parseClassBody(Tokens* tokens, int start_index,
  * @param err 错误码输出指针
  * @return 解析得到的类结构体指针
  */
-static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err)noexcept {
+static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
     if (!tokens || !index || err == NULL) {
         if (err) *err = -1;
         return NULL;
@@ -2203,7 +2118,7 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err)noexcept {
     (*index)++;
     return _class;
 }
-IR_Class* parseClass(Tokens* tokens, int* index, int* err) noexcept {
+IR_Class* parseClass(Tokens* tokens, int* index, int* err) {
     if (!tokens || !index || err == NULL) {
         if (err) *err = -1;
         return NULL;
@@ -2223,7 +2138,7 @@ IR_Class* parseClass(Tokens* tokens, int* index, int* err) noexcept {
     }
     return _class;
 }
-static int getDataSize(IR_DataType type) {
+inline static int getDataSize(IR_DataType type) {
     switch (type.kind) {
     case IR_DT_INT:
         return sizeof(int32_t);
@@ -2237,7 +2152,7 @@ static int getDataSize(IR_DataType type) {
         return sizeof(uint16_t*);  // 用uint16_t规范wchar_t*指针大小
     }
 }
-IR_Class* getClassByName(const wchar_t* name, IR_Program* currentIRProgram)noexcept {
+inline IR_Class* getClassByName(const wchar_t* name, IR_Program* currentIRProgram) {
     if (!name || !currentIRProgram) return NULL;
     for (int i = 0; i < currentIRProgram->class_count; i++) {
         if (wcscmp(currentIRProgram->classes[i]->name, name) == 0) {
@@ -2246,12 +2161,88 @@ IR_Class* getClassByName(const wchar_t* name, IR_Program* currentIRProgram)noexc
     }
     return NULL;
 }
-int getClassSize(IR_Class* cls, IR_Program* currentIRProgram) noexcept {
+//检查是否存在相互包含
+bool checkEachClass(IR_Class* cls, IR_Program* currentIRProgram, std::vector<IR_Class*> lastClasses) {
+    if(!cls) return false;
+    lastClasses.push_back(cls);
+    for (int i = 0; i < cls->body.private_member_count; i++) {
+        IR_ClassMember* member = &cls->body.privateMembers[i];
+        if (member->type == IR_CM_VARIABLE) {
+            if (member->data.variable->type.kind == IR_DT_CUSTOM) {
+                for(int i = 0; i < lastClasses.size(); i++) {
+                    if(wcscmp(member->data.variable->type.customTypeName, lastClasses.at(i)->name) == 0) {
+                        return true;
+                    }
+                }
+                IR_Class* customClass = getClassByName(
+                                            member->data.variable->type.customTypeName, currentIRProgram);
+                if (customClass) {
+                    if(checkEachClass(customClass, currentIRProgram, lastClasses)) return true;
+                }
+            }
+        }
+    }
+    for (int i = 0; i < cls->body.public_member_count; i++) {
+        IR_ClassMember* member = &cls->body.publicMembers[i];
+        if (member->type == IR_CM_VARIABLE) {
+            if (member->data.variable->type.kind == IR_DT_CUSTOM) {
+                for(int i = 0; i < lastClasses.size(); i++) {
+                    if(wcscmp(member->data.variable->type.customTypeName, lastClasses.at(i)->name) == 0) {
+
+                        return true;
+                    }
+                }
+                IR_Class* customClass = getClassByName(
+                                            member->data.variable->type.customTypeName, currentIRProgram);
+                if (customClass) {
+                    if(checkEachClass(customClass, currentIRProgram, lastClasses)) return true;
+                }
+            }
+        }
+    }
+    for (int i = 0; i < cls->body.protected_member_count; i++) {
+        IR_ClassMember* member = &cls->body.protectedMembers[i];
+        if (member->type == IR_CM_VARIABLE) {
+            if (member->data.variable->type.kind == IR_DT_CUSTOM) {
+                for(int i = 0; i < lastClasses.size(); i++) {
+                    if(wcscmp(member->data.variable->type.customTypeName, lastClasses.at(i)->name) == 0) {
+
+                        return true;
+                    }
+                }
+                IR_Class* customClass = getClassByName(
+                                            member->data.variable->type.customTypeName, currentIRProgram);
+                if (customClass) {
+                    if(checkEachClass(customClass, currentIRProgram, lastClasses)) return true;
+                }
+            }
+        }
+    }
+    lastClasses.pop_back();
+    return false;
+}
+inline int getClassSize(IR_Class* cls, IR_Program* currentIRProgram) {
     if (!cls) return 0;
     int size = 0;
     // 计算私有成员变量大小
     for (int i = 0; i < cls->body.private_member_count; i++) {
         IR_ClassMember* member = &cls->body.privateMembers[i];
+        if (member->type == IR_CM_VARIABLE) {
+            if (member->data.variable->type.kind == IR_DT_CUSTOM) {
+                // 自定义类型，递归计算大小
+                IR_Class* customClass = getClassByName(
+                                            member->data.variable->type.customTypeName, currentIRProgram);
+                if (customClass) {
+                    size += getClassSize(customClass, currentIRProgram);
+                }
+            } else {
+                size += getDataSize(member->data.variable->type);
+            }
+        }
+    }
+    // 计算公有成员变量大小
+    for (int i = 0; i < cls->body.public_member_count; i++) {
+        IR_ClassMember* member = &cls->body.publicMembers[i];
         if (member->type == IR_CM_VARIABLE) {
             if (member->data.variable->type.kind == IR_DT_CUSTOM) {
                 // 自定义类型，递归计算大小
@@ -2264,9 +2255,11 @@ int getClassSize(IR_Class* cls, IR_Program* currentIRProgram) noexcept {
                 size += getDataSize(member->data.variable->type);
             }
         }
-        // 计算公有成员变量大小
-        for (int i = 0; i < cls->body.public_member_count; i++) {
-            IR_ClassMember* member = &cls->body.publicMembers[i];
+    }
+    // 计算受保护成员变量大小
+    for (int i = 0; i < cls->body.protected_member_count; i++) {
+        IR_ClassMember* member = &cls->body.protectedMembers[i];
+        if (member->type == IR_CM_VARIABLE) {
             if (member->type == IR_CM_VARIABLE) {
                 if (member->data.variable->type.kind == IR_DT_CUSTOM) {
                     // 自定义类型，递归计算大小
@@ -2280,25 +2273,7 @@ int getClassSize(IR_Class* cls, IR_Program* currentIRProgram) noexcept {
                 }
             }
         }
-        // 计算受保护成员变量大小
-        for (int i = 0; i < cls->body.protected_member_count; i++) {
-            IR_ClassMember* member = &cls->body.protectedMembers[i];
-            if (member->type == IR_CM_VARIABLE) {
-                if (member->type == IR_CM_VARIABLE) {
-                    if (member->data.variable->type.kind == IR_DT_CUSTOM) {
-                        // 自定义类型，递归计算大小
-                        IR_Class* custom_cls = getClassByName(
-                                                   member->data.variable->type.customTypeName, currentIRProgram);
-                        if (custom_cls) {
-                            size += getClassSize(custom_cls, currentIRProgram);
-                        }
-                    } else {
-                        size += getDataSize(member->data.variable->type);
-                    }
-                }
-            }
-        }
-        return size;
     }
+    return size;
 }
 #endif

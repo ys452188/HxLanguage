@@ -4,18 +4,48 @@
 #include <stdio.h>
 #include <string.h>
 #include <wchar.h>
+
 #include <cstdlib>
+
 #include "HxVector.h"
 #include "ObjectReader.h"
 
 class HxMemoryAllocer {
 private:
     HxVector<void*> heapMemoryBlocks;
+    HxVector<uint32_t> freeableMemIndex;
+#ifdef HX_DEBUG
+    size_t usedMemory;
+#endif
 public:
-    HxMemoryAllocer() { }
+    HxMemoryAllocer() {
+#ifdef HX_DEBUG
+        this->usedMemory = 0;
+#endif
+    }
+    void markFreeable(void* mem) {
+        for (uint32_t i = 0; i < this->heapMemoryBlocks.size(); i++) {
+            if (this->heapMemoryBlocks[i] == mem) {
+#ifdef HX_DEBUG
+                wprintf(LOG_LABEL L"标记内存 %p\n", this->heapMemoryBlocks[i]);
+#endif
+                this->freeableMemIndex.push_back(i);
+                return;
+            }
+        }
+    }
+    void gc() {
+        for(int i = 0; i < freeableMemIndex.size(); i++) {
+#ifdef HX_DEBUG
+            wprintf(LOG_LABEL L"释放内存 %p\n", this->heapMemoryBlocks[freeableMemIndex[i]]);
+#endif
+            free(this->heapMemoryBlocks[freeableMemIndex[i]]);
+            this->heapMemoryBlocks[freeableMemIndex[i]] = NULL;
+        }
+    }
     ~HxMemoryAllocer() {
-        for(int i = 0; i < this->heapMemoryBlocks.size(); i++) {
-            if(this->heapMemoryBlocks[i]) {
+        for (int i = 0; i < this->heapMemoryBlocks.size(); i++) {
+            if (this->heapMemoryBlocks[i]) {
 #ifdef HX_DEBUG
                 wprintf(LOG_LABEL L"释放内存 %p\n", this->heapMemoryBlocks[i]);
 #endif
@@ -24,59 +54,57 @@ public:
             }
         }
     }
-    void* stackAlloc(const unsigned int size) noexcept {
-#ifdef HX_DEBUG
-        wprintf(LOG_LABEL L"申请一块%u字节的栈内存\n", size);
-#endif
-        void* memory = alloca(size);
-        if(!memory && size != 0) {
-            fwprintf(errorStream, ERR_LABEL "栈内存分配失败！使用堆内存重试中\n");
-            this->hxMalloc(size);
-        }
-        return memory;
-    }
     void* hxMalloc(const unsigned int size) noexcept {
-        if(size == 0) return NULL;
+        if (size == 0) return NULL;
 #ifdef HX_DEBUG
         wprintf(LOG_LABEL L"申请一块%u字节的内存\n", size);
 #endif
         void* memory = calloc(size, sizeof(char));
-        while(!memory && size != 0) {
+        while (!memory && size != 0) {
             fwprintf(errorStream, ERR_LABEL "内存分配失败！重试中\n");
             memory = calloc(size, sizeof(char));
         }
-        if(memory) this->heapMemoryBlocks.push_back(memory);
+#ifdef HX_DEBUG
+        this->usedMemory += size;
+#endif
+        if (memory) this->heapMemoryBlocks.push_back(memory);
+#ifdef HX_DEBUG
+        wprintf(LOG_LABEL L"申请内存 %p\n",memory);
+        wprintf(LOG_LABEL L"HxAllocr内存用量：%zu byte\n", this->usedMemory);
+#endif
         return memory;
     }
     void* hxRealloc(void* old, int oldSize, int newSize) noexcept {
         void* memory = realloc(old, newSize);
-        if(!memory) return NULL;
-        for(int i = 0; i < this->heapMemoryBlocks.size(); i++) {
-            if(this->heapMemoryBlocks[i] == old) {
+#ifdef HX_DEBUG
+        this->usedMemory = this->usedMemory - oldSize + newSize;
+        wprintf(LOG_LABEL L"HxAllocr内存用量：%zu byte\n", this->usedMemory);
+#endif
+        if (!memory) return NULL;
+        for (int i = 0; i < this->heapMemoryBlocks.size(); i++) {
+            if (this->heapMemoryBlocks[i] == old) {
                 this->heapMemoryBlocks[i] = memory;
                 break;
             }
         }
+
         return memory;
     }
 };
 alignas(64) static thread_local HxMemoryAllocer memoryAllocer;
 
 typedef struct Symbol Symbol;
-typedef struct CallFrame {  //栈帧
+typedef struct CallFrame {  // 栈帧
     Procedure* proc;
-    int instIndex;   //解释到哪了
-    char* localVarData;
-    int dataPtr;   //指localVarData
+    int instIndex;  // 解释到哪了
+    char* stack;
+    int dataPtr;  // 指stack
     HxVector<Symbol> localSymbol;
 } CallFrame;
-static int pushCallFrame(Procedure& proc, HxVector<CallFrame>& frames) {
-    CallFrame frame = {
-        &proc,
-        0,
-        (char*)(memoryAllocer.hxMalloc(proc.stackSize))
-    };
-    if(frame.localVarData == NULL && proc.stackSize != 0) {
+//栈帧压栈
+inline static int pushCallFrame(Procedure& proc, HxVector<CallFrame>& frames) {
+    CallFrame frame = {&proc, 0, (char*)(memoryAllocer.hxMalloc(proc.stackSize))};
+    if (frame.stack == NULL && proc.stackSize != 0) {
         fwprintf(errorStream, ERR_LABEL "内存分配失败！\n");
         return -1;
     }
@@ -85,7 +113,6 @@ static int pushCallFrame(Procedure& proc, HxVector<CallFrame>& frames) {
     return 0;
 }
 
-#define OP_STACK_SIZE 512  // 操作数栈大小
 typedef enum OpStackType {
     TYPE_INT = 1,
     TYPE_FLOAT,  // double
@@ -97,7 +124,7 @@ typedef enum OpStackType {
 typedef struct _OpStack {
     OpStackType type;
     int size;
-    char value[8];    //type为string时存wchar_t*
+    char value[8];  // type为string时存wchar_t*
 } _OpStack;
 typedef struct OpStack {
     _OpStack opStack[OP_STACK_SIZE];
@@ -108,9 +135,10 @@ typedef struct Symbol {
     void* address;
 } Symbol;
 
-static int interpretInstruction(Instruction& inst, OpStack& opStack,
-                                char*& stack, int& usedStackSize,
-                                ObjectCode& obj, int& instIndex, int& frameTop, HxVector<CallFrame>& frames);
+inline static int interpretInstruction(Instruction& inst, OpStack& opStack,
+                                       char*& stack, int& usedStackSize,
+                                       ObjectCode& obj, int& instIndex, int& frameTop,
+                                       HxVector<CallFrame>& frames);
 int interpret(ObjectCode& obj, int& err) noexcept {
 #ifdef HX_DEBUG
     wprintf(LOG_LABEL L"开始解释\n");
@@ -125,13 +153,17 @@ int interpret(ObjectCode& obj, int& err) noexcept {
     HxVector<CallFrame> frames;
     frames.reserve(512);
     int frameTop = 0;
-    if(pushCallFrame(entry, frames) != 0) return -1;
+    if (pushCallFrame(entry, frames) != 0) return -1;
     OpStack opStack = {};
 
-    while(!frames.empty()) {
-        if(interpretInstruction(frames[(frameTop)].proc->instructions[(frames[(frameTop)].instIndex)],
-                                opStack, frames[(frameTop)].localVarData, frames[(frameTop)].dataPtr,
-                                obj, frames[(frameTop)].instIndex, frameTop, frames)) return -1;
+    while (!frames.empty()) {
+        if (interpretInstruction(
+                    frames[(frameTop)]
+                    .proc->instructions[(frames[(frameTop)].instIndex)],
+                    opStack, frames[(frameTop)].stack,
+                    frames[(frameTop)].dataPtr, obj, frames[(frameTop)].instIndex,
+                    frameTop, frames))
+            return -1;
     }
 
     return 0;
@@ -143,7 +175,7 @@ static inline int promoteNumeric(_OpStack& a, _OpStack& b) {
             (b.type != TYPE_INT && b.type != TYPE_FLOAT)) {
 #ifdef HX_DEBUG
         wprintf(LOG_LABEL L"a.type: ");
-        switch(a.type) {
+        switch (a.type) {
         case TYPE_ADDRESS:
             wprintf(L"address");
             break;
@@ -159,7 +191,7 @@ static inline int promoteNumeric(_OpStack& a, _OpStack& b) {
         }
         wprintf(L"\n");
         wprintf(LOG_LABEL L"b.type: ");
-        switch(b.type) {
+        switch (b.type) {
         case TYPE_ADDRESS:
             wprintf(L"address");
             break;
@@ -198,14 +230,14 @@ static inline int promoteNumeric(_OpStack& a, _OpStack& b) {
     return 0;
 }
 
-int interpretInstruction(Instruction& inst, OpStack& opStack,
-                         char*& stack, int& usedStackSize,
-                         ObjectCode& obj, int& instIndex, int& frameTop, HxVector<CallFrame>& frames) {
+inline int interpretInstruction(Instruction& inst, OpStack& opStack, char*& stack,
+                                int& usedStackSize, ObjectCode& obj, int& instIndex,
+                                int& frameTop, HxVector<CallFrame>& frames) {
 #ifdef HX_DEBUG
     // wprintf(LOG_LABEL L"__________________________________________\n");
 #endif
 #ifdef HX_DEBUG
-    //wprintf(LOG_LABEL L"解释指令\n");
+    // wprintf(LOG_LABEL L"解释指令\n");
 #endif
     switch (inst.opcode) {
     case OP_LOAD_CONST: {
@@ -313,7 +345,8 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
 #endif
         }
         if (opStack.top >= OP_STACK_SIZE) {
-            fwprintf(errorStream, ERR_LABEL L"停♡......快停下♡人家栈都被......\n\n");
+            fwprintf(errorStream,
+                     ERR_LABEL L"停♡......快停下♡人家栈都被......\n\n");
             return -1;
         }
 
@@ -402,13 +435,14 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
             return -1;
         }
 
-        //插入栈帧
-        if(pushCallFrame(proc, frames) != 0) return -1;
+        // 插入栈帧
+        if (pushCallFrame(proc, frames) != 0) return -1;
         frameTop++;
 
         int localSymbolTop = argCount - 1;
         for (int i = opStack.top - 1; i >= opStack.top - argCount; i--) {
-            frames[(frameTop)].localSymbol[localSymbolTop--].type = opStack.opStack[i].type;
+            frames[(frameTop)].localSymbol[localSymbolTop--].type =
+                opStack.opStack[i].type;
             frames[(frameTop)].dataPtr += opStack.opStack[i].size;
         }
         instIndex++;
@@ -428,6 +462,7 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
 #ifdef HX_DEBUG
         wprintf(LOG_LABEL L"__________________________________________\n");
 #endif
+        memoryAllocer.markFreeable((void*)frames[frameTop].stack);
         frames.pop_back();
         frameTop--;
         return 0;
@@ -437,7 +472,7 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
 #ifdef HX_DEBUG
         wprintf(LOG_LABEL L"弾出一个元素，栈指针下移\n");
 #endif
-        if(opStack.top <= 0) {
+        if (opStack.top <= 0) {
             fwprintf(errorStream, ERR_LABEL L"栈中没有元素，因此无法执行OP_POP\n");
             return -1;
         }
@@ -449,13 +484,13 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
 #ifdef HX_DEBUG
         wprintf(LOG_LABEL L"char(u16)->i32\n");
 #endif
-        //读出原有的 16 位字符值
+        // 读出原有的 16 位字符值
         uint16_t charVal = *((uint16_t*)topRef.value);
         int32_t intVal = (int32_t)charVal;
 
         topRef.type = TYPE_INT;
         topRef.size = sizeof(int32_t);
-        memset(topRef.value, 0, 8); // 清理原有内存，防止脏数据干扰
+        memset(topRef.value, 0, 8);  // 清理原有内存，防止脏数据干扰
         memcpy(topRef.value, &intVal, sizeof(int32_t));
         break;
     }
@@ -465,7 +500,7 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
         wprintf(LOG_LABEL L"i32->char(u16)\n");
 #endif
         int32_t intVal = *((int32_t*)topRef.value);
-        uint16_t charVal = (uint16_t)intVal; // 强制截断
+        uint16_t charVal = (uint16_t)intVal;  // 强制截断
 
         topRef.type = TYPE_CHAR;
         topRef.size = sizeof(uint16_t);
@@ -502,7 +537,6 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
         break;
     }
     case OP_CHAR_TO_STRING: {
-
     }
     case OP_FLOAT_TO_INT: {
 #ifdef HX_DEBUG
@@ -548,7 +582,7 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
 #ifdef HX_DEBUG
         wprintf(LOG_LABEL L"跳转\n");
 #endif
-        if(inst.params[0].type != PARAM_TYPE_INDEX) {
+        if (inst.params[0].type != PARAM_TYPE_INDEX) {
             if (inst.params[0].type != PARAM_TYPE_INDEX) {
                 fwprintf(errorStream, ERR_LABEL L"非法指令格式\n");
                 return -1;
@@ -558,6 +592,16 @@ int interpretInstruction(Instruction& inst, OpStack& opStack,
         memcpy(&instAddr, inst.params[0].value, sizeof(uint32_t));
         instIndex = (int)instAddr;
         return 0;
+    }
+    case OP_DEF_VAR: {
+#ifdef HX_DEBUG
+        wprintf(LOG_LABEL L"为局部变量开辟空间\n");
+#endif
+        break;
+    }
+    default: {
+        wprintf(ERR_LABEL L"未知指令！\n");
+        return -1;
     }
     }
 #ifdef HX_DEBUG

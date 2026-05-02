@@ -13,6 +13,7 @@ typedef enum ErrorType {
     ERR_VAL,                  // 字面量写错了
     ERR_HUAKUOHAO_NOT_CLOSE,  // 花括号末正确闭合
     ERR_DEF_VAR,              // 定义变量语法错误
+    ERR_VAR_REPEATED,         // 变量重复定义
     ERR_DEF_CLASS,
     ERR_DEF_CLASS_ACCESS,              // 定义类时访问权限修饰符使用错误
     ERR_DEF_CLASS_DOUBLE_DEFINED_SYM,  // 定义类时重复声明符号
@@ -30,11 +31,13 @@ typedef enum ErrorType {
     ERR_CLASS_REPEATED,  // 类重复定义
     ERR_RET,             // 返回值错误 （语法错误）
     ERR_RET_VAL,         // 返回值错误
-    ERR_UNKNOWN_TYPE,     // 未知类型
+    ERR_UNKNOWN_TYPE,    // 未知类型
     ERR_REPEAT,
+    ERR_IF,
+    ERROR_UNCOMPLETED_CLASS,   //类相互包含
 } ErrorType;
 
-void initLocale(void) {
+void initLocale(void) noexcept {
     // 设置Locale
     if (!setlocale(LC_ALL, "zh_CN.UTF-8")) {
         if (!setlocale(LC_ALL, "en_US.UTF-8")) {
@@ -45,7 +48,7 @@ void initLocale(void) {
     fwide(stdout, 1);  // 1 = 宽字符定向
     return;
 }
-void setError(ErrorType e, int errorLine, const wchar_t* errCode) {
+void setError(ErrorType e, int errorLine, const wchar_t* errCode) noexcept {
     initLocale();
     switch (e) {
     case ERR_NO_END: {
@@ -91,7 +94,7 @@ void setError(ErrorType e, int errorLine, const wchar_t* errCode) {
         swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
                  L"\33[31m[ERR]定义变量语法错误！\33[0m(位于第%d行)\n\33[36m["
                  L"NOTE]\33[0mDefineVariable::= "
-                 L"<\"var\"><\":\"><id><\"->\"><kw|id>\n     定义变量::= "
+                 L"<\"var\"><\":\"><id><\":\"><kw|id>\n     定义变量::= "
                  L"<\"定义变量\"><\":\"><标识符><\",\"><\"它的类型是\"><\":\"><"
                  L"标识符|关键字>\n",
                  errorLine);
@@ -206,7 +209,7 @@ void setError(ErrorType e, int errorLine, const wchar_t* errCode) {
 
     case ERR_OUT_OF_VALUE: {
         swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
-                 L"\33[31m[ERR]数值溢出(%ls)！\33[0m\n",
+                 L"\33[31m[ERR]啊♡~数值太......太大了......要溢出来了♡......(%ls)\33[0m\n",
                  errCode ? errCode : L"？？？？");
         break;
     }
@@ -238,18 +241,41 @@ void setError(ErrorType e, int errorLine, const wchar_t* errCode) {
     }
     case ERR_UNKNOWN_TYPE: {
         swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
-                 L"\33[31m[ERR]不兼容的类型！\33[0m(位于第%d行)\n", errorLine,
-                 errCode ? errCode : L" ");
+                 L"\33[31m[ERR]这是什么类型喵？  %ls\33[0m(位于第%d行)\n",
+                 errCode ? errCode : L" ", errorLine);
         break;
     }
     case ERR_RET_VAL: {
         swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
-                 L"\33[31m[ERR]返回值错误！\33[0m(位于第%d行)\n", errorLine);
+                 L"\33[31m[ERR]返回值错误了喵\33[0m(位于第%d行)\n", errorLine);
         break;
     }
     case ERR_REPEAT: {
         swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
-                 L"\33[31m[ERR]循环语句错误！\33[0m(位于第%d行)\n\33[36m[NOTE]\33[0m 循环 ::= repeat-> 语句|块 [until(exp)]\n", errorLine);
+                 L"\33[31m[ERR]循环语句错误了喵\33[0m(位于第%d行)\n\33[36m[NOTE]"
+                 L"\33[0m 循环 ::= repeat-> 语句|块 [until(exp)]\n",
+                 errorLine);
+        break;
+    }
+
+    case ERR_IF: {
+        swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
+                 L"\33[31m[ERR]对条件判断语句犯错误了喵～\33[0m(位于第%d行)\n\33["
+                 L"36m[NOTE]\33[0m 条件判断 ::= if: 表达式 -> 语句|块\n",
+                 errorLine);
+        break;
+    }
+
+    case ERR_VAR_REPEATED: {
+        swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
+                 L"\33[31m[ERR]变量不能重复定义的喵～笨蛋！\33[0m(位于第%d行)\n",
+                 errorLine);
+        break;
+    }
+    case ERROR_UNCOMPLETED_CLASS: {
+        swprintf(errorMessageBuffer, ERROR_BUF_SIZE,
+                 L"\33[31m[ERR]杂鱼~你的类相互包含了喵~(如：类A里有类B类型成员，而类B里又有类A类型成员)如果不报错，占的内存就太......太大了。电脑会坏......坏掉了.....\33[0m(位于第%d行)\n",
+                 errorLine);
         break;
     }
     }
