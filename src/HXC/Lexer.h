@@ -56,10 +56,10 @@ typedef struct Tokens {  // Token流
     Token* tokens;
 } Tokens;
 wchar_t* keyword[] = {  // 关键字
-    L"ret",        L"var\0",      L"con\0",    L"fun\0",    L"class",      L"if",     L"int",        L"float",
-    L"str",        L"char",       L"整型",     L"浮点型",   L"字符串型",   L"字符型", L"定义变量\0", L"定义常量\0",
-    L"定义函数\0", L"定义类",     L"公有成员", L"私有成员", L"受保护成员", L"public", L"private",    L"proctected",
-    L"它的类型是", L"它的父类是", L"parent",   L"repeat",   L"循环",       NULL};
+    L"ret",        L"var\0",  L"con\0",    L"fun\0",    L"class",      L"if",         L"int",        L"float",
+    L"str",        L"char",   L"整型",     L"浮点型",   L"字符串型",   L"字符型",     L"定义变量\0", L"定义常量\0",
+    L"定义函数\0", L"定义类", L"公有成员", L"私有成员", L"受保护成员", L"public",     L"private",    L"proctected",
+    L"类型是",     L"父类是", L"repeat",   L"循环",     L"返回",       L"返回类型是", L"无返回类型", NULL};
 static inline wchar_t* escape(const wchar_t* src) noexcept;
 static inline bool isKeyword(wchar_t* str) noexcept;  // 判断是否是关键字
 static inline bool isOperator(wchar_t ch) noexcept;   // 判断是否是操作符

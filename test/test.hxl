@@ -1,8 +1,8 @@
-class: A {
-    public:
-    var:a:B;
+定义类: A -> {
+    公有成员:
+    定义变量:a，类型是:B;
 }
-class: B {
+定义类: B， 父类是：C -> {
     public:
     var:b:int;
     var:c:C;
@@ -12,16 +12,19 @@ class: C {
     var:c:float;
     var:d:D;
 }
-class: D {
+class: A->D {
     var:a:str;
 }
-定义函数：主函数（无参数）{
+定义函数：主函数（无参数）->{
+    定义变量：新变量，类型是:int。
+    新变量 = 114。
     
-    var:newVar:int;
-    newVar = 114;
-    var:newVar1:int;
-    newVar1 = newVar;
-    repeat-> __hx_write_string__ "Hello, HxHLanguage!\n"；
-    返回：0；
+    var:newVar1:int。
     
+    newVar1 = 新变量+514。
+    
+    #循环-> __hx_write_string__ "Hello, HxHLanguage!\n"。
+    __hx_write_string__ "Hello, HxHLanguage!\n"。
+    
+    返回：newVar1。  
 }

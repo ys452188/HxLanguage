@@ -554,14 +554,15 @@ static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index, in
             return NULL;
         }
         (*index)++;
-        if (tokens->tokens[*index].type != TOK_ID) {
+        // 它的类型是
+        if (tokens->tokens[*index].type != TOK_KW) {
             *err = 255;  // 语法错误
             setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
             free(var->name);
             free(var);
             return NULL;
         }
-        if (wcscmp(tokens->tokens[*index].value, L"它的类型是") != 0) {
+        if (wcscmp(tokens->tokens[*index].value, L"类型是") != 0) {
             *err = 255;  // 语法错误
             setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
             free(var->name);
@@ -576,6 +577,7 @@ static IR_Variable* parseGlobalOrClassVariable_CN(Tokens* tokens, int* index, in
             return NULL;
         }
         (*index)++;
+        // :
         if (tokens->tokens[*index].type != TOK_OPR_COLON) {
             *err = 255;  // 语法错误
             setError(ERR_DEF_VAR, tokens->tokens[*index].line, NULL);
@@ -902,7 +904,7 @@ static IR_FunctionParam* parseFunctionParams(Tokens* tokens, int* index, int* pa
     }
     return params;
 }
-// 函数定义::= 函数:标识符(参数列表)[,它的返回类型是:数据类型]{函数体}
+// 函数定义::= 函数:标识符(参数列表)[,返回类型:数据类型] -> {函数体}
 static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
     if ((*index + 1) >= tokens->count) {
         *err = 255;  // 语法错误
@@ -1010,8 +1012,8 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
             return NULL;
         }
         (*index)++;
-        // 它的返回类型是
-        if (wcscmp(tokens->tokens[*index].value, L"它的返回类型是") == 0) {
+        // 返回类型是
+        if (wcscmp(tokens->tokens[*index].value, L"返回类型是") == 0) {
             // 冒号
             if ((*index + 1) >= tokens->count) {
                 setError(ERR_FUN, tokens->tokens[*index].line, NULL);
@@ -1093,7 +1095,7 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
             }
             (*index)++;
             // 它没有返回类型
-        } else if (wcscmp(tokens->tokens[*index].value, L"它没有返回类型") == 0) {
+        } else if (wcscmp(tokens->tokens[*index].value, L"无返回类型") == 0) {
             function->isReturnTypeKnown = true;
             function->returnType.kind = IR_DT_VOID;
             if ((*index + 1) >= tokens->count) {
@@ -1129,9 +1131,34 @@ static IR_Function* parseFunction_CN(Tokens* tokens, int* index, int* err) {
         function->bodyTokens = NULL;
         return function;
     }
-    if (tokens->tokens[*index].type != TOK_OPR_LBRACE) {
+    if (tokens->tokens[*index].type != TOK_OPR_POINT) {
+        setError(ERR_FUN, tokens->tokens[*index].line, NULL);
+        *err = 255;
+        // 释放已分配的内存
+        for (int i = 0; i < function->paramCount; i++) {
+            free(function->params[i].name);
+        }
+        free(function->params);
+        free(function->name);
+        free(function);
+        return NULL;
+    }
+    if ((*index + 1) >= tokens->count) {
         setError(ERR_FUN, tokens->tokens[*index].line, NULL);
         *err = 255;  // 语法错误
+        // 释放已分配的内存
+        for (int i = 0; i < function->paramCount; i++) {
+            free(function->params[i].name);
+        }
+        free(function->params);
+        free(function->name);
+        free(function);
+        return NULL;
+    }
+    (*index)++;
+    if (tokens->tokens[*index].type != TOK_OPR_LBRACE) {
+        setError(ERR_FUN, tokens->tokens[*index].line, NULL);
+        *err = 255;
         // 释放已分配的内存
         for (int i = 0; i < function->paramCount; i++) {
             free(function->params[i].name);
@@ -1881,7 +1908,7 @@ static IR_ClassBody parseClassBody(Tokens* tokens, int start_index, int end_inde
     }
     return body;
 }
-// 定义类::= class:标识符 [,parent:标识符] { 类体 }
+// 定义类::= class:[标识符->] 标识符 { 类体 }
 /** 解析类定义(英文关键字)
  * @param tokens 词法分析结果
  * @param index 当前解析位置
@@ -1889,6 +1916,145 @@ static IR_ClassBody parseClassBody(Tokens* tokens, int start_index, int end_inde
  * @return 解析得到的类结构体指针
  */
 static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
+    if (!tokens || !index || err == NULL) {
+        if (err) *err = -1;
+        return NULL;
+    }
+    if ((*index + 1) >= tokens->count) {
+        *err = 255;  // 语法错误
+        setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
+        return NULL;
+    }
+    (*index)++;
+    if (tokens->tokens[*index].type != TOK_OPR_COLON) {
+        setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
+        *err = 255;  // 语法错误
+        return NULL;
+    }
+    if ((*index + 1) >= tokens->count) {
+        setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
+        *err = 255;  // 语法错误
+        return NULL;
+    }
+    (*index)++;
+    // 类名或父类名
+    if (tokens->tokens[*index].type != TOK_ID) {
+        setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
+        *err = 255;  // 语法错误
+        return NULL;
+    }
+    int tmpIndex = *index;
+    if ((*index + 1) >= tokens->count) {
+        setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
+        *err = 255;  // 语法错误
+        return NULL;
+    }
+    (*index)++;
+
+    IR_Class* _class = (IR_Class*)calloc(1, sizeof(IR_Class));
+    if (!_class) {
+        *err = -1;
+        return NULL;
+    }
+    if (tokens->tokens[*index].type == TOK_OPR_POINT) {
+        if ((*index + 1) >= tokens->count) {
+            setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
+            *err = 255;
+            return NULL;
+        }
+        (*index)++;
+        if (tokens->tokens[*index].type != TOK_ID) {
+            setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
+            *err = 255;
+            return NULL;
+        }
+        _class->name = (wchar_t*)calloc(wcslen(tokens->tokens[*index].value) + 1, sizeof(wchar_t));
+        if (!_class->name) {
+            *err = -1;
+            free(_class);
+            return NULL;
+        }
+        wcscpy(_class->name, tokens->tokens[*index].value);
+#ifdef HX_DEBUG
+        log(L"解析到类名：%ls", _class->name);
+#endif
+        _class->parent_name = (wchar_t*)calloc(wcslen(tokens->tokens[tmpIndex].value) + 1, sizeof(wchar_t));
+        if (!_class->parent_name) {
+            *err = -1;
+            free(_class->name);
+            free(_class);
+            return NULL;
+        }
+        wcscpy(_class->parent_name, tokens->tokens[tmpIndex].value);
+#ifdef HX_DEBUG
+        log(L"解析到父类名：%ls", _class->parent_name);
+#endif
+        if ((*index + 1) >= tokens->count) {
+            setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
+            *err = 255;  // 语法错误
+            free(_class->parent_name);
+            free(_class->name);
+            free(_class);
+            return NULL;
+        }
+        (*index)++;
+    } else {
+        _class->name = (wchar_t*)calloc(wcslen(tokens->tokens[tmpIndex].value) + 1, sizeof(wchar_t));
+        if (!_class->name) {
+            *err = -1;
+            free(_class);
+            return NULL;
+        }
+        wcscpy(_class->name, tokens->tokens[tmpIndex].value);
+#ifdef HX_DEBUG
+        log(L"解析到类名：%ls", _class->name);
+#endif
+    }
+    // 类体
+    if (tokens->tokens[*index].type != TOK_OPR_LBRACE) {
+        setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
+        *err = 255;  // 语法错误
+        if (_class->parent_name) free(_class->parent_name);
+        free(_class->name);
+        free(_class);
+        return NULL;
+    }
+    // 确定类体范围
+    int body_start_index = *index;
+    int brace_count = 1;
+    while (*index + 1 < tokens->count && brace_count > 0) {
+        (*index)++;
+        if (tokens->tokens[*index].type == TOK_OPR_LBRACE) {
+            brace_count++;
+        } else if (tokens->tokens[*index].type == TOK_OPR_RBRACE) {
+            brace_count--;
+        }
+
+        if (brace_count == 0) {
+            break;
+        }
+    }
+    if (brace_count != 0) {
+        setError(ERR_HUAKUOHAO_NOT_CLOSE, tokens->tokens[*index].line, tokens->tokens[body_start_index].value);
+        *err = 255;  // 语法错误
+        if (_class->parent_name) free(_class->parent_name);
+        free(_class->name);
+        free(_class);
+        return NULL;
+    }
+    // 解析类体
+    _class->body = parseClassBody(tokens, body_start_index + 1, *index - 1, err);
+    if (*err != 0) {
+        if (_class->parent_name) free(_class->parent_name);
+        free(_class->name);
+        free(_class);
+        return NULL;
+    }
+    (*index)++;
+    return _class;
+}
+// 定义类：<id> [, 父类是：<id>]-> {}
+static IR_Class* parseClass_CN(Tokens* tokens, int* index, int* err) {
     if (!tokens || !index || err == NULL) {
         if (err) *err = -1;
         return NULL;
@@ -1950,8 +2116,7 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
             return NULL;
         }
         (*index)++;
-        // parent:
-        if (wcscmp(tokens->tokens[*index].value, L"parent") != 0) {
+        if (wcscmp(tokens->tokens[*index].value, L"父类是") != 0) {
             setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
             *err = 255;  // 语法错误
             free(_class->name);
@@ -1968,14 +2133,14 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
         (*index)++;
         if (tokens->tokens[*index].type != TOK_OPR_COLON) {
             setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-            *err = 255;  // 语法错误
+            *err = 255;
             free(_class->name);
             free(_class);
             return NULL;
         }
         if ((*index + 1) >= tokens->count) {
             setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
-            *err = 255;  // 语法错误
+            *err = 255;
             free(_class->name);
             free(_class);
             return NULL;
@@ -2010,6 +2175,23 @@ static IR_Class* parseClass_EN(Tokens* tokens, int* index, int* err) {
         }
         (*index)++;
     }
+    if (tokens->tokens[*index].type != TOK_OPR_POINT) {
+        setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
+        *err = 255;  // 语法错误
+        if (_class->parent_name) free(_class->parent_name);
+        free(_class->name);
+        free(_class);
+        return NULL;
+    }
+    if ((*index + 1) >= tokens->count) {
+        setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
+        *err = 255;  // 语法错误
+        free(_class->parent_name);
+        free(_class->name);
+        free(_class);
+        return NULL;
+    }
+    (*index)++;
     // 类体
     if (tokens->tokens[*index].type != TOK_OPR_LBRACE) {
         setError(ERR_DEF_CLASS, tokens->tokens[*index].line, NULL);
@@ -2070,6 +2252,15 @@ IR_Class* parseClass(Tokens* tokens, int* index, int* err) {
         }
         _class->line = line;
     } else if (wcscmp(tokens->tokens[*index].value, L"定义类") == 0) {
+#ifdef HX_DEBUG
+        log(L"开始解析类定义(中文)...");
+#endif
+        int line = tokens->tokens[*index].line;
+        _class = parseClass_CN(tokens, index, err);
+        if (*err != 0 || _class == NULL) {
+            return NULL;
+        }
+        _class->line = line;
     }
     return _class;
 }

@@ -1,5 +1,6 @@
 #include "config.h"
 #define HXC_VERSION 0.114f
+// #define HX_DEBUG
 bool isInDebugMode = true;
 #include <errno.h>
 #include <stdio.h>
@@ -122,5 +123,7 @@ int main(int argc, char* argv[]) {
         fwprintf(errorStream, L"\33[31m[ERR]\33[0m内存分配失败！\n");
     } catch (std::exception e) {
         fwprintf(errorStream, L"\33[31m[ERR]\33[0m标准库抛异常力！\n");
+    } catch (std::out_of_range e) {
+        fwprintf(errorStream, L"\33[31m[ERR]\33[0m标准库抛异常力！out_of_range！！！\n");
     }
 }

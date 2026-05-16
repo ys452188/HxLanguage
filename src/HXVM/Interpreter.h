@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <wchar.h>
+
 #include <atomic>
 extern std::atomic<bool> shouldExit;
 #include <cstdlib>
@@ -583,6 +584,10 @@ inline int interpretInstruction(Instruction& inst, OpStack& opStack, char*& stac
             return 0;
         }
         case OP_STORE_VAR: {
+            if (opStack.top > OP_STACK_SIZE || opStack.top == 0) {
+                fwprintf(errorStream, ERR_LABEL L"停♡......快停下♡人家栈都被......\n");
+                return -1;
+            }
             uint32_t size = 0;
             uint32_t offest = 0;
             memcpy(&size, inst.params[1].value, sizeof(uint32_t));
@@ -590,9 +595,15 @@ inline int interpretInstruction(Instruction& inst, OpStack& opStack, char*& stac
 #ifdef HX_DEBUG
             wprintf(LOG_LABEL L"将大小为%u的数据存储至偏移量%u处\n", size, offest);
 #endif
+            void* addr = stack + offest;
+            memcpy(addr, opStack.opStack[opStack.top - 1].value, size);
             break;
         }
         case OP_LOAD_VAR: {
+            if (opStack.top >= OP_STACK_SIZE) {
+                fwprintf(errorStream, ERR_LABEL L"停♡......快停下♡人家栈都被......\n");
+                return -1;
+            }
             uint32_t size = 0;
             uint32_t offest = 0;
             memcpy(&size, inst.params[1].value, sizeof(uint32_t));
@@ -600,6 +611,45 @@ inline int interpretInstruction(Instruction& inst, OpStack& opStack, char*& stac
 #ifdef HX_DEBUG
             wprintf(LOG_LABEL L"将偏移量%u处，大小%u byte的数据加载至栈顶\n", offest, size);
 #endif
+
+            switch (inst.params[1].type) {
+                case PARAM_TYPE_INT: {
+                    opStack.opStack[opStack.top].type = TYPE_INT;
+                } break;
+                case PARAM_TYPE_FLOAT: {
+                    opStack.opStack[opStack.top].type = TYPE_FLOAT;
+                } break;
+                case PARAM_TYPE_CHAR: {
+                    opStack.opStack[opStack.top].type = TYPE_CHAR;
+                } break;
+                case PARAM_TYPE_BOOL: {
+                    opStack.opStack[opStack.top].type = TYPE_BOOL;
+                } break;
+                case PARAM_TYPE_STRING: {
+                    opStack.opStack[opStack.top].type = TYPE_STRING;
+                } break;
+                case PARAM_TYPE_ADDRESS: {
+                    opStack.opStack[opStack.top].type = TYPE_ADDRESS;
+                } break;
+                default: {
+                    fwprintf(errorStream, ERR_LABEL L"非法指令格式\n");
+                    return -1;
+                } break;
+            }
+            void* addr = stack + offest;
+            opStack.opStack[opStack.top].size = size;
+            memcpy(opStack.opStack[opStack.top].value, addr, size);
+#ifdef HX_DEBUG
+            switch (opStack.opStack[opStack.top].type) {
+                case TYPE_INT:
+                    wprintf(LOG_LABEL L"%d\n", *((int32_t*)opStack.opStack[opStack.top].value));
+                    break;
+                case TYPE_FLOAT:
+                    wprintf(LOG_LABEL L"%lf\n", *((double*)opStack.opStack[opStack.top].value));
+                    break;
+            }
+#endif
+            opStack.top++;
             break;
         }
         default: {

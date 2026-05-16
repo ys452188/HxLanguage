@@ -90,12 +90,14 @@ static void listObjectCode_Proc(Procedure* proc) {
                 fwprintf(logStream, L"\n");
                 break;
             }
-            case OP_LOAD_VAR:
+            case OP_LOAD_VAR: {
+                void* offest = ins.params[0].value;
+                void* size = ins.params[1].value;
                 fwprintf(logStream,
                          L"\t%03u: \33[1;34mOP_LOAD_VAR\33[0m "
-                         L"index=%d\n",
-                         i, (int)ins.params[0].value[0]);
-                break;
+                         L"offest=%u,    size=%u\n",
+                         i, *((uint32_t*)offest), *((uint32_t*)size));
+            } break;
             case OP_STORE_VAR:
                 fwprintf(logStream,
                          L"\t%03u: \33[1;34mOP_STORE_VAR "
@@ -331,6 +333,44 @@ ObjectCode* generateObjectCode(IR_Program* program, int* err) {
                         switch (objCode->procedures.at(blockTable.vars.at(n).procIndex)
                                     ->instructions[blockTable.vars.at(n).instIndex.at(m)]
                                     .opcode) {
+                            case OP_LOAD_VAR: {
+#ifdef HX_DEBUG
+                                log(L"========"
+                                    L"处理LOAD_VAR偏移"
+                                    L"量及大小");
+#endif
+                                uint32_t index = 0;
+                                memcpy(&index,
+                                       objCode->procedures.at(blockTable.vars.at(n).procIndex)
+                                           ->instructions[blockTable.vars.at(n).instIndex.at(m)]
+                                           .params[0]
+                                           .value,
+                                       sizeof(uint32_t));
+                                if (n != index) continue;
+                                uint32_t offest = blockTable.vars.at(n).offest;
+                                int32_t _size = blockTable.vars.at(n).size;
+                                uint32_t size = (uint32_t)_size;
+                                if (_size <= 0) {
+                                    size = blockTable.vars.at(n).size;
+                                }
+#ifdef HX_DEBUG
+                                log(L"offest = "
+                                    L"%ud, "
+                                    L"size = "
+                                    L"%ud",
+                                    offest, size);
+#endif
+                                memcpy(objCode->procedures.at(blockTable.vars.at(n).procIndex)
+                                           ->instructions[blockTable.vars.at(n).instIndex.at(m)]
+                                           .params[0]
+                                           .value,
+                                       &offest, sizeof(uint32_t));
+                                memcpy(objCode->procedures.at(blockTable.vars.at(n).procIndex)
+                                           ->instructions[blockTable.vars.at(n).instIndex.at(m)]
+                                           .params[1]
+                                           .value,
+                                       &size, sizeof(uint32_t));
+                            } break;
                             case OP_STORE_VAR: {
                                 // OP_STORE_VAR
                                 // <offest>
@@ -422,6 +462,44 @@ ObjectCode* generateObjectCode(IR_Program* program, int* err) {
                         switch (objCode->procedures.at(blockTable.vars.at(n).procIndex)
                                     ->instructions[blockTable.vars.at(n).instIndex.at(m)]
                                     .opcode) {
+                            case OP_LOAD_VAR: {
+#ifdef HX_DEBUG
+                                log(L"========"
+                                    L"处理LOAD_VAR偏移"
+                                    L"量及大小");
+#endif
+                                uint32_t index = 0;
+                                memcpy(&index,
+                                       objCode->procedures.at(blockTable.vars.at(n).procIndex)
+                                           ->instructions[blockTable.vars.at(n).instIndex.at(m)]
+                                           .params[0]
+                                           .value,
+                                       sizeof(uint32_t));
+                                if (n != index) continue;
+                                uint32_t offest = blockTable.vars.at(n).offest;
+                                int32_t _size = blockTable.vars.at(n).size;
+                                uint32_t size = (uint32_t)_size;
+                                if (_size <= 0) {
+                                    size = blockTable.vars.at(n).size;
+                                }
+#ifdef HX_DEBUG
+                                log(L"offest = "
+                                    L"%ud, "
+                                    L"size = "
+                                    L"%ud",
+                                    offest, size);
+#endif
+                                memcpy(objCode->procedures.at(blockTable.vars.at(n).procIndex)
+                                           ->instructions[blockTable.vars.at(n).instIndex.at(m)]
+                                           .params[0]
+                                           .value,
+                                       &offest, sizeof(uint32_t));
+                                memcpy(objCode->procedures.at(blockTable.vars.at(n).procIndex)
+                                           ->instructions[blockTable.vars.at(n).instIndex.at(m)]
+                                           .params[1]
+                                           .value,
+                                       &size, sizeof(uint32_t));
+                            } break;
                             case OP_STORE_VAR: {
                                 // OP_STORE_VAR
                                 // <offest>
@@ -686,6 +764,7 @@ static int generateStatement(int& index, FunCallPitchTable& pitchTable, Constant
         freeAST(expNode);
     } else if (wcscmp(currentToken.value, L"var") == 0) {  // var:id[:type][=exp];
         Symbol newVar = {};
+        newVar.procIndex = procIndex;
         if (index + 1 >= function->body_token_count) {
             setError(ERR_DEF_VAR, currentToken.line, NULL);
             *err = 255;
@@ -911,6 +990,264 @@ static int generateStatement(int& index, FunCallPitchTable& pitchTable, Constant
             }
             newVar.isTypeKnown = true;
         }
+        if (function->bodyTokens[index].type == TOK_END) {
+        } else {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+#ifdef HX_DEBUG
+        log(L"将%ls推入局部符号表", newVar.name);
+#endif
+        localeSymbolTable.vars.push_back(newVar);
+        uint32_t varSize = (uint32_t)getVarSize(newVar.type, currentProgram->classes, currentProgram->class_count);
+        if (stackSize + varSize > stackSize) stackSize += varSize;
+        if (localVarSize + 1 > localVarSize) localVarSize++;
+
+    } else if (wcscmp(currentToken.value, L"定义变量") == 0) {  // 定义变量: <id> [, 类型是:<kw>|<id>]];
+        Symbol newVar = {};
+        newVar.procIndex = procIndex;
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向冒号
+        if (function->bodyTokens[index].type != TOK_OPR_COLON) {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向标识符
+        if (function->bodyTokens[index].type != TOK_ID) {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        newVar.name = (wchar_t*)calloc(wcslen(function->bodyTokens[index].value) + 1, sizeof(wchar_t));
+        if (!(newVar.name)) {
+            *err = -1;
+            delete (proc);
+            return -1;
+        }
+        wcscpy(newVar.name, function->bodyTokens[index].value);
+#ifdef HX_DEBUG
+        log(L"解析到局部变量“%ls”", newVar.name);
+#endif
+        // 检查变量唯一性
+        if (getVarIndex(newVar.name, &localeSymbolTable) != -1) {
+            *err = 255;
+            setError(ERR_VAR_REPEATED, currentToken.line, NULL);
+            delete (proc);
+            return 255;
+        }
+        for (int i = 0; i < outsideScopes.size(); i++) {
+            if (getVarIndex(newVar.name, &outsideScopes.at(i)) != -1) {
+                *err = 255;
+                setError(ERR_VAR_REPEATED, currentToken.line, NULL);
+                delete (proc);
+                return 255;
+            }
+        }
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;  // 指向结束标志或,
+        if (function->bodyTokens[index].type == TOK_OPR_COMMA) {
+            if (index + 1 >= function->body_token_count) {
+                setError(ERR_DEF_VAR, currentToken.line, NULL);
+                *err = 255;
+                delete (proc);
+                return 255;
+            }
+            index++;  // 指向"类型是"或"初始化"
+            if (wcscmp(L"类型是", function->bodyTokens[index].value) == 0) {
+                newVar.isTypeKnown = true;
+                if (index + 1 >= function->body_token_count) {
+                    setError(ERR_DEF_VAR, currentToken.line, NULL);
+                    *err = 255;
+                    delete (proc);
+                    return 255;
+                }
+                index++;  // 指向冒号
+                if (function->bodyTokens[index].type != TOK_OPR_COLON) {
+                    setError(ERR_DEF_VAR, currentToken.line, NULL);
+                    *err = 255;
+                    delete (proc);
+                    return 255;
+                }
+                if (index + 1 >= function->body_token_count) {
+                    setError(ERR_DEF_VAR, currentToken.line, NULL);
+                    *err = 255;
+                    delete (proc);
+                    return 255;
+                }
+                index++;  // 指向类型名
+                if (function->bodyTokens[index].type != TOK_ID && function->bodyTokens[index].type != TOK_KW) {
+                    setError(ERR_DEF_VAR, currentToken.line, NULL);
+                    *err = 255;
+                    delete (proc);
+                    return 255;
+                }
+#ifdef HX_DEBUG
+                log(L"解析到局部变量的类型名“%ls”", function->bodyTokens[index].value);
+#endif
+                // 提前越界检查，仅检查
+                if (index + 1 >= function->body_token_count) {
+                    setError(ERR_DEF_VAR, currentToken.line, NULL);
+                    *err = 255;
+                    delete (proc);
+                    return 255;
+                }
+                if (wcscmp(function->bodyTokens[index].value, L"int") == 0 ||
+                    wcscmp(function->bodyTokens[index].value, L"整型") == 0) {
+                    newVar.type.kind = IR_DT_INT;
+                    // int&
+                    if (function->bodyTokens[index + 1].type == TOK_OPR_REFER) {
+                        newVar.type.kind = IR_DT_INT_REFER;
+                        index++;
+                        // int[]
+                    } else if (function->bodyTokens[index + 1].type == TOK_OPR_LBRACKET) {
+                        if (index + 2 >= function->body_token_count) {
+                            setError(ERR_TYPE, currentToken.line, NULL);
+                            *err = 255;
+                            delete (proc);
+                            return 255;
+                        }
+                        if (function->bodyTokens[index + 2].type != TOK_OPR_RBRACKET) {
+                            setError(ERR_TYPE, currentToken.line, NULL);
+                            *err = 255;
+                            delete (proc);
+                            return 255;
+                        }
+                        newVar.type.kind = IR_DT_INT_ARR;
+                        index += 2;
+                    }
+                } else if (wcscmp(function->bodyTokens[index].value, L"float") == 0 ||
+                           wcscmp(function->bodyTokens[index].value, L"浮点型") == 0) {
+                    newVar.type.kind = IR_DT_FLOAT;
+                    if (function->bodyTokens[index + 1].type == TOK_OPR_REFER) {
+                        newVar.type.kind = IR_DT_FLOAT_REFER;
+                        index++;
+                    } else if (function->bodyTokens[index + 1].type == TOK_OPR_LBRACKET) {
+                        if (index + 2 >= function->body_token_count) {
+                            setError(ERR_TYPE, currentToken.line, NULL);
+                            *err = 255;
+                            delete (proc);
+                            return 255;
+                        }
+                        if (function->bodyTokens[index + 2].type != TOK_OPR_RBRACKET) {
+                            setError(ERR_TYPE, currentToken.line, NULL);
+                            *err = 255;
+                            delete (proc);
+                            return 255;
+                        }
+                        newVar.type.kind = IR_DT_FLOAT_ARR;
+                        index += 2;
+                    }
+                } else if (wcscmp(function->bodyTokens[index].value, L"char") == 0 ||
+                           wcscmp(function->bodyTokens[index].value, L"字符型") == 0) {
+                    newVar.type.kind = IR_DT_CHAR;
+                    if (function->bodyTokens[index + 1].type == TOK_OPR_REFER) {
+                        newVar.type.kind = IR_DT_CHAR_REFER;
+                        index++;
+                    } else if (function->bodyTokens[index + 1].type == TOK_OPR_LBRACKET) {
+                        if (index + 2 >= function->body_token_count) {
+                            setError(ERR_TYPE, currentToken.line, NULL);
+                            *err = 255;
+                            delete (proc);
+                            return 255;
+                        }
+                        if (function->bodyTokens[index + 2].type != TOK_OPR_RBRACKET) {
+                            setError(ERR_TYPE, currentToken.line, NULL);
+                            *err = 255;
+                            delete (proc);
+                            return 255;
+                        }
+                        newVar.type.kind = IR_DT_CHAR_ARR;
+                        index += 2;
+                    }
+                } else if (wcscmp(function->bodyTokens[index].value, L"str") == 0 ||
+                           wcscmp(function->bodyTokens[index].value, L"字符串型") == 0) {
+                    newVar.type.kind = IR_DT_STRING;
+                    if (function->bodyTokens[index + 1].type == TOK_OPR_REFER) {
+                        newVar.type.kind = IR_DT_STRING_REFER;
+                        index++;
+                    } else if (function->bodyTokens[index + 1].type == TOK_OPR_LBRACKET) {
+                        if (index + 2 >= function->body_token_count) {
+                            setError(ERR_TYPE, currentToken.line, NULL);
+                            *err = 255;
+                            delete (proc);
+                            return 255;
+                        }
+                        if (function->bodyTokens[index + 2].type != TOK_OPR_RBRACKET) {
+                            setError(ERR_TYPE, currentToken.line, NULL);
+                            *err = 255;
+                            delete (proc);
+                            return 255;
+                        }
+                        newVar.type.kind = IR_DT_STRING_ARR;
+                        index += 2;
+                    }
+                }
+                if (function->bodyTokens[index].type == TOK_ID) {
+                    newVar.type.kind = IR_DT_CUSTOM;
+                    if (getClassByName(function->bodyTokens[index].value, currentProgram) == NULL) {
+                        setError(ERR_UNKNOWN_TYPE, function->bodyTokens[index].line, function->bodyTokens[index].value);
+                        *err = 255;
+                        return 255;
+                    }
+                    newVar.type.customTypeName =
+                        (wchar_t*)calloc(wcslen(function->bodyTokens[index].value) + 1, sizeof(wchar_t));
+                    if (!(newVar.type.customTypeName)) {
+                        *err = -1;
+                        delete (proc);
+                        return -1;
+                    }
+                    wcscpy(newVar.type.customTypeName, function->bodyTokens[index].value);
+                    if (function->bodyTokens[index + 1].type == TOK_OPR_REFER) {
+                        newVar.type.kind = IR_DT_CUSTOM_REFER;
+                        index++;
+                    } else if (function->bodyTokens[index + 1].type == TOK_OPR_LBRACKET) {
+                        if (index + 2 >= function->body_token_count) {
+                            setError(ERR_TYPE, currentToken.line, NULL);
+                            *err = 255;
+                            delete (proc);
+                            return 255;
+                        }
+                        if (function->bodyTokens[index + 2].type != TOK_OPR_RBRACKET) {
+                            setError(ERR_TYPE, currentToken.line, NULL);
+                            *err = 255;
+                            delete (proc);
+                            return 255;
+                        }
+                        newVar.type.kind = IR_DT_CUSTOM_ARR;
+                        index += 2;
+                    }
+                }
+            }
+        }
+        if (index + 1 >= function->body_token_count) {
+            setError(ERR_DEF_VAR, currentToken.line, NULL);
+            *err = 255;
+            delete (proc);
+            return 255;
+        }
+        index++;
+
         if (function->bodyTokens[index].type == TOK_END) {
         } else {
             setError(ERR_DEF_VAR, currentToken.line, NULL);
@@ -1210,8 +1547,15 @@ void generateInstructionsFromAST(std::vector<Instruction>& instructions, int* in
         (*inst_index)++;
     } else if (node->kind == NODE_VAR) {
         newInst.opcode = OP_LOAD_VAR;
+        // 回填策略：
+        /*将newInst.params[0]临时设为变量索引，后头回填时验证索引是否贴合再改*/
         newInst.params[0].type = PARAM_TYPE_OFFEST;
         newInst.params[0].size = sizeof(uint32_t);
+        uint32_t index = (uint32_t)node->data.var.index;
+        memcpy(newInst.params[0].value, &index, sizeof(uint32_t));
+        // 后面再回填
+        newInst.params[1].type = PARAM_TYPE_SIZE;
+        newInst.params[1].size = sizeof(uint32_t);
         switch (node->data.var.type.kind) {
             case IR_DT_INT:
                 newInst.params[1].type = PARAM_TYPE_INT;
@@ -1239,6 +1583,7 @@ void generateInstructionsFromAST(std::vector<Instruction>& instructions, int* in
                     *inst_index, i, symbols.at(i).vars[varIndex].name);
 #endif
                 symbols.at(i).vars[varIndex].instIndex.push_back(*inst_index);
+                uint32_t size = 0;
             }
         }
         (*inst_index)++;

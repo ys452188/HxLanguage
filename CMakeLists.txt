@@ -32,6 +32,13 @@ else()
     unset(HX_DEBUG_MACRO) 
 endif()
 
+if(LANG STREQUAL "zh_TW")
+    set(LANG_zh_TW_MACRO ON)
+    set(LANG_zh_TW_MACRO 1)
+else()
+    unset(LANG_zh_TW_MACRO) 
+endif()    
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/config.h.in"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/HXC/config.h"

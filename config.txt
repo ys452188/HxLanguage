@@ -2,3 +2,5 @@
 
 #是否打印调试信息
 HX_DEBUG=OFF
+#setError语言
+LANG=zh_TW

@@ -47,7 +47,9 @@ enum {
     PARAM_TYPE_BOOL,
     PARAM_TYPE_STRING,
     PARAM_TYPE_ADDRESS,
-    PARAM_TYPE_INDEX  // uint32_t 索引常量池或过程表
+    PARAM_TYPE_INDEX,   // uint32_t 索引常量池或过程表
+    PARAM_TYPE_SIZE,    // u32
+    PARAM_TYPE_OFFEST,  // u32
 };
 typedef struct Param {
     ParamType type;  // char
