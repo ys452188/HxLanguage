@@ -100,7 +100,9 @@ public:
     wchar_t* name;
     bool isTypeKnown;
     IR_DataType type;
-    int instIndex;
+    int size;
+    int offest;  //在栈中的偏移量
+    std::vector<int> instIndex;
     int procIndex;
 
     ~Symbol() {

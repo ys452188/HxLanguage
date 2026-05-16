@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }
         */
-        std::string path("../test.hxl");
+        std::string path("../test/test.hxl");
         // 读取源文件
         wchar_t* src = NULL;
         FILE* sourceFile = fopen(path.c_str(), "r");
@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
             freeIRProgram(&program);
             return -1;
         }
-        std::string objPath = "../out.hxo";
+        std::string objPath = "../test/out.hxo";
         FILE* objFile = fopen(objPath.c_str(), "wb");
         writeObjectCode(objFile, *objCode);
         freeIRProgram(&program);

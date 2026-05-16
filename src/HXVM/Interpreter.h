@@ -230,8 +230,8 @@ static inline int promoteNumeric(_OpStack& a, _OpStack& b) {
     return 0;
 }
 
-inline int interpretInstruction(Instruction& inst, OpStack& opStack, char*& stack,
-                                int& usedStackSize, ObjectCode& obj, int& instIndex,
+inline int interpretInstruction(Instruction& inst, OpStack& opStack, char*& stack, int& stackTop,
+                                ObjectCode& obj, int& instIndex,
                                 int& frameTop, HxVector<CallFrame>& frames) {
 #ifdef HX_DEBUG
     // wprintf(LOG_LABEL L"__________________________________________\n");
@@ -593,9 +593,23 @@ inline int interpretInstruction(Instruction& inst, OpStack& opStack, char*& stac
         instIndex = (int)instAddr;
         return 0;
     }
-    case OP_DEF_VAR: {
-#ifdef HX_DEBUG
-        wprintf(LOG_LABEL L"为局部变量开辟空间\n");
+    case OP_STORE_VAR: {
+        uint32_t size = 0;
+        uint32_t offest = 0;
+        memcpy(&size, inst.params[1].value, sizeof(uint32_t));
+        memcpy(&offest, inst.params[0].value, sizeof(uint32_t));
+        #ifdef HX_DEBUG
+        wprintf(LOG_LABEL L"将大小为%u的数据存储至偏移量%u处\n", size, offest);
+#endif
+        break;
+    }
+    case OP_LOAD_VAR: {
+        uint32_t size = 0;
+        uint32_t offest = 0;
+        memcpy(&size, inst.params[1].value, sizeof(uint32_t));
+        memcpy(&offest, inst.params[0].value, sizeof(uint32_t));
+        #ifdef HX_DEBUG
+        wprintf(LOG_LABEL L"将偏移量%u处，大小%u byte的数据加载至栈顶\n", offest, size);
 #endif
         break;
     }

@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
 
     memoryAllocer;
     ObjectCode objCode = {};
-    std::string path = "../out.hxo";
+    std::string path = "../test/out.hxo";
     FILE* file = fopen(path.c_str(), "rb");
     // 读
     if (readObjectCode(file, objCode)) {

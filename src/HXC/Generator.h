@@ -26,9 +26,8 @@ typedef uint16_t wchar;
 extern ObjectCode* generateObjectCode(IR_Program* program, int* err);
 extern void freeObjectCode(ObjectCode** obj);
 static void generateInstructionsFromAST(std::vector<Instruction>& instructions,
-                                        int* inst_index, int* inst_size,
-                                        ASTNode* node,
-                                        ConstantPool* constantPool, int* err);
+                                        int* inst_index, int* inst_size, ASTNode* node,
+                                        ConstantPool* constantPool, std::vector<SymbolTable>& symbols, int procIndex, int* err);
 /*
  * 生成函数的目标代码
  * @param function: 中间表示的函数
@@ -69,7 +68,10 @@ static void listObjectCode_Proc(Procedure* proc) {
     if (!proc) return;
     fwprintf(logStream, L"[DEB] 过程指令数: %u\n", proc->instructionSize);
     for (uint32_t i = 0; i < proc->instructionSize; i++) {
-        Instruction ins = proc->instructions[i];
+        Instruction& ins = proc->instructions[i];
+        if(ins.isNotUsed) {
+            fwprintf(logStream, L"\33[31m(无用)\33[0m");
+        }
         switch (ins.opcode) {
         case OP_LOAD_CONST: {
             fwprintf(logStream, L"\t%03u: \33[1;34mOP_LOAD_CONST\33[0m", i);
@@ -99,7 +101,7 @@ static void listObjectCode_Proc(Procedure* proc) {
                      (int)ins.params[0].value[0]);
             break;
         case OP_STORE_VAR:
-            fwprintf(logStream, L"\t%03u: \33[1;34mOP_STORE_VAR\33[0m\n", i);
+            fwprintf(logStream, L"\t%03u: \33[1;34mOP_STORE_VAR %u(offest), %u(copySize)\33[0m\n", i, *((uint32_t*)ins.params[0].value), *((uint32_t*)ins.params[1].value));
             break;
         case OP_ADD:
             fwprintf(logStream, L"\t%03u: \33[1;34mOP_ADD\33[0m\n", i);
@@ -152,10 +154,6 @@ static void listObjectCode_Proc(Procedure* proc) {
             break;
         case OP_JMP:
             fwprintf(logStream, L"\t%03u: \33[1;34m OP_JMP (addr)%u\33[0m\n", i,
-                     *((uint32_t*)ins.params[0].value));
-            break;
-        case OP_DEF_VAR:
-            fwprintf(logStream, L"\t%03u: \33[1;34m OP_DEF_VAR\33[0m (size)%u\n", i,
                      *((uint32_t*)ins.params[0].value));
             break;
         default:
@@ -246,9 +244,6 @@ ObjectCode* generateObjectCode(IR_Program* program, int* err) {
         newProc->fun = program->functions[i];
         objFun.push_back(newProc);
         if (*err != 0) return NULL;
-#ifdef HX_DEBUG
-        listObjectCode_Proc(objFun.at(i));
-#endif
     }
     if (*err != 0) {
         // freeObjectCode(&objCode);
@@ -257,7 +252,7 @@ ObjectCode* generateObjectCode(IR_Program* program, int* err) {
 
     // main在目标中索引等于中间表示中的索引
     markUsedFun(objFun.at(mainIndex), objFun);
-    // 写入函数
+    // 填入函数
     for (int i = 0; i < objFun.size(); i++) {
         if (objFun.at(i)->isUsed == true) {
 #ifdef HX_DEBUG
@@ -297,22 +292,91 @@ ObjectCode* generateObjectCode(IR_Program* program, int* err) {
     }
 
     //变量处理
-    if(!isInDebugMode) {
 #ifdef HX_DEBUG
-        log(L"处理变量中...");
+    log(L"处理变量中...");
 #endif
-        //将从未使用过的变量对应的指标记为无用
+    //计算大小 & 偏移量
+#ifdef HX_DEBUG
+    log(L"========计算变量大小");
+#endif
+    for(int i = 0; i < symbols.size(); i++) {
+        std::vector<SymbolTable>& funTable = symbols.at(i);
+        for(int j = 0; j < funTable.size(); j++) {
+            SymbolTable& blockTable = funTable.at(j);
+            int offest = 0;
+            for(int n = 0; n < blockTable.vars.size(); n++) {
+                int size = getVarSize(blockTable.vars.at(n).type, program->classes, program->class_count);
+                blockTable.vars.at(n).offest = offest;
+                blockTable.vars.at(n).size = size;
+                offest += blockTable.vars.at(n).size;
+#ifdef HX_DEBUG
+                log(L"变量%ls：size = %u, offest = %u", blockTable.vars.at(n).name, blockTable.vars.at(n).size, blockTable.vars.at(n).offest);
+#endif
+            }
+        }
+    }
+    //将从未使用过的变量对应的指标记为无用  & 处理指令里变量的偏移量 & 更新OP_JMP地址
+    if(!isInDebugMode) {
         for(int i = 0; i < symbols.size(); i++) {
             std::vector<SymbolTable>& funTable = symbols.at(i);
             for(int j = 0; j < funTable.size(); j++) {
                 SymbolTable& blockTable = funTable.at(j);
                 for(int n = 0; n < blockTable.vars.size(); n++) {
+                    for(int m = 0; m < blockTable.vars.at(n).instIndex.size(); m++)  {
+                        switch(objCode->procedures
+                                .at(blockTable.vars.at(n).procIndex)
+                                ->instructions[blockTable.vars.at(n).instIndex.at(m)]
+                                .opcode) {
+                        case OP_STORE_VAR: {
+                            //OP_STORE_VAR <offest> <copySize>
+#ifdef HX_DEBUG
+                            log(L"========处理偏移量");
+#endif
+                            uint32_t offest = blockTable.vars.at(n).offest;
+                            int32_t _size = blockTable.vars.at(n).size;
+                            uint32_t size = (uint32_t)_size;
+                            if(_size <= 0) {
+                                size = blockTable.vars.at(n).size;
+                            }
+#ifdef HX_DEBUG
+                            log(L"offest = %u, size = %u", offest, size);
+#endif
+                            memcpy(objCode->procedures
+                                   .at(blockTable.vars.at(n).procIndex)
+                                   ->instructions[blockTable.vars.at(n).instIndex.at(m)].params[0].value, &offest, sizeof(uint32_t));
+                            memcpy(objCode->procedures
+                                   .at(blockTable.vars.at(n).procIndex)
+                                   ->instructions[blockTable.vars.at(n).instIndex.at(m)].params[1].value, &size, sizeof(uint32_t));
+                        }
+                        break;
+                        }
+                    }
                     if(!blockTable.vars.at(n).isUsed) {
-                        objCode->procedures
-                        .at(blockTable.vars.at(n).procIndex)
-                        ->instructions
-                        .at(blockTable.vars.at(n).instIndex)
-                        .isNotUsed = true;
+                        for(int m = 0; m < blockTable.vars.at(n).instIndex.size(); m++) {
+                            objCode->procedures
+                            .at(blockTable.vars.at(n).procIndex)
+                            ->instructions[blockTable.vars.at(n).instIndex.at(m)]
+                            .isNotUsed = true;
+                            for(int instIndex = blockTable.vars.at(n).instIndex.at(m); instIndex < objCode->procedures
+                                    .at(blockTable.vars.at(n).procIndex)
+                                    ->instructions.size(); instIndex++) {
+                                if(objCode->procedures
+                                        .at(blockTable.vars.at(n).procIndex)
+                                        ->instructions.at(instIndex).opcode == OP_JMP) {
+#ifdef HX_DEBUG
+                                    log(L"更新OP_JMP(第%u指令)", instIndex);
+#endif
+                                    uint32_t jmpAddr = 0;
+                                    memcpy(&jmpAddr, (objCode->procedures
+                                                      .at(blockTable.vars.at(n).procIndex)
+                                                      ->instructions.at(instIndex).params[0]).value, sizeof(uint32_t));
+                                    jmpAddr -= 1;
+                                    memcpy((objCode->procedures
+                                            .at(blockTable.vars.at(n).procIndex)
+                                            ->instructions.at(instIndex).params[0]).value, &jmpAddr, sizeof(uint32_t));
+                                }
+                            }
+                        }
 #ifdef HX_DEBUG
                         log(L"已将变量“%ls”设为无用", blockTable.vars.at(n).name);
 #endif
@@ -326,12 +390,59 @@ ObjectCode* generateObjectCode(IR_Program* program, int* err) {
                             objCode->procedures
                             .at(blockTable.vars.at(n).procIndex)
                             ->localVarSize --;
+
+                            for(int m = n; m < blockTable.vars.size(); m++) {
+                                blockTable.vars.at(m).offest -= blockTable.vars.at(n).size;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        for(int i = 0; i < symbols.size(); i++) {
+            std::vector<SymbolTable>& funTable = symbols.at(i);
+            for(int j = 0; j < funTable.size(); j++) {
+                SymbolTable& blockTable = funTable.at(j);
+                for(int n = 0; n < blockTable.vars.size(); n++) {
+                    for(int m = 0; m < blockTable.vars.at(n).instIndex.size(); m++)  {
+                        switch(objCode->procedures
+                                .at(blockTable.vars.at(n).procIndex)
+                                ->instructions[blockTable.vars.at(n).instIndex.at(m)]
+                                .opcode) {
+                        case OP_STORE_VAR: {
+                            //OP_STORE_VAR <offest> <copySize>
+#ifdef HX_DEBUG
+                            log(L"========处理偏移量");
+#endif
+                            uint32_t offest = blockTable.vars.at(n).offest;
+                            int32_t _size = blockTable.vars.at(n).size;
+                            uint32_t size = (uint32_t)_size;
+                            if(_size <= 0) {
+                                size = blockTable.vars.at(n).size;
+                            }
+#ifdef HX_DEBUG
+                            log(L"offest = %ud, size = %ud", offest, size);
+#endif
+                            memcpy(objCode->procedures
+                                   .at(blockTable.vars.at(n).procIndex)
+                                   ->instructions[blockTable.vars.at(n).instIndex.at(m)].params[0].value, &offest, sizeof(uint32_t));
+                            memcpy(objCode->procedures
+                                   .at(blockTable.vars.at(n).procIndex)
+                                   ->instructions[blockTable.vars.at(n).instIndex.at(m)].params[1].value, &size, sizeof(uint32_t));
+                        }
+                        break;
                         }
                     }
                 }
             }
         }
     }
+#ifdef HX_DEBUG
+    for (int i = 0; i < program->function_count; i++) {
+        listObjectCode_Proc(objFun.at(i));
+    }
+#endif
     return objCode;
 }
 static int getClassIndexByName(wchar_t* name, IR_Class** class_table,
@@ -409,6 +520,7 @@ Procedure* generateFunction(int procIndex, IR_Function* function, IR_Program* cu
             return NULL;
         index++;
     }
+    proc->instructionSize = proc->instructions.size();
     function->proc = proc;
     return proc;
 }
@@ -416,7 +528,8 @@ static int generateStatement(int& index, FunCallPitchTable& pitchTable,
                              ConstantPool* constantPool, IR_Function** all_functions,
                              IR_Program* currentProgram, int all_function_count,
                              IR_Function* function, SymbolTable& localeSymbolTable,
-                             std::vector<SymbolTable>& outsideScopes, Procedure* proc,
+                             std::vector<SymbolTable>& outsideScopes  /*块内与块外的并集,localeSymbolTable包含其中*/,
+                             Procedure* proc,
                              int procIndex, uint32_t& stackSize, uint32_t& localVarSize, int* err) {
     Token& currentToken = function->bodyTokens[index];
     if (currentToken.type == TOK_END) return 0;
@@ -476,7 +589,7 @@ static int generateStatement(int& index, FunCallPitchTable& pitchTable,
         int inst_index = proc->instructionSize;
         int inst_size = proc->instructionSize;
         generateInstructionsFromAST(proc->instructions, &inst_index, &inst_size,
-                                    expNode, constantPool, err);
+                                    expNode, constantPool, outsideScopes, procIndex, err);
         if (*err != 0) {
             freeAST(expNode);
             return 255;
@@ -551,7 +664,7 @@ static int generateStatement(int& index, FunCallPitchTable& pitchTable,
         int inst_index = proc->instructionSize;
         int inst_size = proc->instructionSize;
         generateInstructionsFromAST(proc->instructions, &inst_index, &inst_size,
-                                    expNode, constantPool, err);
+                                    expNode, constantPool, outsideScopes, procIndex,err);
         if (expNode->kind == NODE_FUN_CALL) {
             // 有返回值要手动弹出
             if (expNode->data.funCall.ret_type.kind != IR_DT_VOID) {
@@ -807,22 +920,14 @@ static int generateStatement(int& index, FunCallPitchTable& pitchTable,
             delete (proc);
             return 255;
         }
-
-        Instruction defVarInst = {};
-        defVarInst.opcode = OP_DEF_VAR;
-        defVarInst.params[0].size = sizeof(uint32_t);
+#ifdef HX_DEBUG
+        log(L"将%ls推入局部符号表", newVar.name);
+#endif
+        localeSymbolTable.vars.push_back(newVar);
         uint32_t varSize = (uint32_t)getVarSize(
                                newVar.type, currentProgram->classes, currentProgram->class_count);
         if(stackSize+varSize > stackSize) stackSize+=varSize;
         if(localVarSize+1>localVarSize) localVarSize++;
-        memcpy(defVarInst.params[0].value, &varSize, defVarInst.params[0].size);
-        defVarInst.params[0].type = PARAM_TYPE_SIZE;
-        proc->instructions.push_back(defVarInst);
-        proc->instructionSize++;
-        newVar.procIndex = procIndex;
-        newVar.instIndex = proc->instructions.size()-1;
-
-        localeSymbolTable.vars.push_back(newVar);
 
     } else if (wcscmp(currentToken.value, L"repeat") ==
                0) {  // 循环 ::= repeat-> 语句|块 [until:exp]
@@ -933,7 +1038,7 @@ static int generateStatement(int& index, FunCallPitchTable& pitchTable,
         int inst_index = proc->instructionSize;
         int inst_size = proc->instructionSize;
         generateInstructionsFromAST(proc->instructions, &inst_index, &inst_size,
-                                    expNode, constantPool, err);
+                                    expNode, constantPool, outsideScopes, procIndex, err);
         if (*err != 0) {
             freeAST(expNode);
             return 255;
@@ -963,11 +1068,17 @@ static int generateStatement(int& index, FunCallPitchTable& pitchTable,
 }
 void generateInstructionsFromAST(std::vector<Instruction>& instructions,
                                  int* inst_index, int* inst_size, ASTNode* node,
-                                 ConstantPool* constantPool, int* err) {
+                                 ConstantPool* constantPool, std::vector<SymbolTable>& symbols, int procIndex, int* err) {
+#ifdef HX_DEBUG
+    log(L"生成表达式相关指令");
+#endif
     if (!inst_index || !node || !inst_size || !err || !constantPool) {
         if (err) *err = -1;
         return;
     }
+#ifdef HX_DEBUG
+    printAST(node);
+#endif
     Instruction newInst = {};
     if (node->kind == NODE_VALUE) {
         newInst.opcode = OP_LOAD_CONST;
@@ -1027,10 +1138,48 @@ void generateInstructionsFromAST(std::vector<Instruction>& instructions,
             (*inst_index)++;
             (*inst_size)++;
         }*/
+    } else if(node->kind == NODE_BINARY && node->data.binary.op == 4) {   //赋值
+#ifdef HX_DEBUG
+        log(L"分析赋值语句");
+#endif
+        if ((node->left->kind == NODE_BINARY && node->left->data.binary.op != 4)  //不能给除赋值表达式以外的赋值
+                || (node->left->kind == NODE_VALUE)) {
+            *err = 255;
+            setError(ERR_EXP, node->token->line, NULL);
+            return;
+        }
+        int expInstBegin = *inst_index;
+        //只生成右子树指令
+        generateInstructionsFromAST(instructions, inst_index, inst_size,
+                                    node->right, constantPool, symbols, procIndex, err);
+        if (*err != 0) return;
+        newInst.opcode = OP_STORE_VAR;
+        newInst.params[0].type = PARAM_TYPE_OFFEST;
+        //先不修改值，标记完无用变量后再改
+        newInst.params[0].size = sizeof(uint32_t);
+        newInst.params[1].size = sizeof(uint32_t);
+        newInst.params[1].type = PARAM_TYPE_SIZE;
+        instructions.push_back(newInst);
+        (*inst_index)++;
+        //关联需要将右值表达式所有相关指令加上
+        if(node->kind != NODE_VALUE && node->kind != NODE_FUN_CALL)
+            for(int i = symbols.size()-1; i >= 0; i--) {
+                int varIndex = -1;
+                if((varIndex = getVarIndex(node->left->data.var.name, &symbols.at(i))) != -1) {
+                    for(int j = expInstBegin; j < instructions.size(); j++) {
+#ifdef HX_DEBUG
+                        log(L"将索引为%d指令与第%d作用域的変量%ls关联", j, i, symbols.at(i).vars[varIndex].name);
+#endif
+                        symbols.at(i).vars[varIndex].instIndex.push_back(j);
+                    }
+                }
+            }
+        (*inst_size)++;
+        return;
     } else if (node->kind == NODE_BINARY) {
         // 生成左子树指令
         generateInstructionsFromAST(instructions, inst_index, inst_size, node->left,
-                                    constantPool, err);
+                                    constantPool, symbols, procIndex, err);
         if (*err != 0) {
             return;
         }
@@ -1043,7 +1192,7 @@ void generateInstructionsFromAST(std::vector<Instruction>& instructions,
         }
         // 生成右子树指令
         generateInstructionsFromAST(instructions, inst_index, inst_size,
-                                    node->right, constantPool, err);
+                                    node->right, constantPool, symbols, procIndex, err);
         if (*err != 0) {
             return;
         }
@@ -1068,16 +1217,6 @@ void generateInstructionsFromAST(std::vector<Instruction>& instructions,
         case 3:  // DIV
             newInst.opcode = OP_DIV;
             break;
-        case 4: {  // SET
-            if (node->left->kind != NODE_VAR && node->left->kind != NODE_BINARY &&
-                    node->left->data.binary.op != 4) {
-                *err = 255;
-                setError(ERR_EXP, node->token->line, NULL);
-                return;
-            }
-
-            break;
-        }
         case 5: {  // STRING_CONCAT
             newInst.opcode = OP_STRING_CONCAT;
             break;
@@ -1089,8 +1228,7 @@ void generateInstructionsFromAST(std::vector<Instruction>& instructions,
         (*inst_index)++;
     } else if (node->kind == NODE_VAR) {
         newInst.opcode = OP_LOAD_VAR;
-        newInst.params[0].type = PARAM_TYPE_INDEX;
-        memcpy(newInst.params[0].value, &(node->data.var.index), sizeof(uint32_t));
+        newInst.params[0].type = PARAM_TYPE_OFFEST;
         newInst.params[0].size = sizeof(uint32_t);
         switch (node->data.var.type.kind) {
         case IR_DT_INT:
@@ -1105,6 +1243,19 @@ void generateInstructionsFromAST(std::vector<Instruction>& instructions,
         case IR_DT_STRING:
             newInst.params[1].type = PARAM_TYPE_STRING;
             break;
+        }
+        //关联指令
+#ifdef HX_DEBUG
+        log(L"关联指令LODA_VAR");
+#endif
+        for(int i = symbols.size()-1; i >= 0; i--) {
+            int varIndex = -1;
+            if((varIndex = getVarIndex(node->data.var.name, &symbols.at(i))) != -1) {
+#ifdef HX_DEBUG
+                log(L"将指令OP_LOAD_VAR(第%d)与第%d作用域的変量%ls关联", *inst_index, i, symbols.at(i).vars[varIndex].name);
+#endif
+                symbols.at(i).vars[varIndex].instIndex.push_back(*inst_index);
+            }
         }
         (*inst_index)++;
     } else if (node->kind == NODE_FUN_CALL) {
@@ -1121,7 +1272,7 @@ void generateInstructionsFromAST(std::vector<Instruction>& instructions,
             // 生成参数指令
             for (uint32_t i = 0; i < node->data.funCall.arg_count; i++) {
                 generateInstructionsFromAST(instructions, inst_index, inst_size,
-                                            node->data.funCall.args[i], constantPool,
+                                            node->data.funCall.args[i], constantPool, symbols, procIndex,
                                             err);
                 if (*err != 0) {
                     return;

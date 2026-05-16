@@ -16,10 +16,12 @@ class: D {
     var:a:str;
 }
 定义函数：主函数（无参数）{
-    #if:1 -> __hx_write_string__ "Hello, HxHLanguage!\n"；
     
     var:newVar:int;
+    newVar = 114;
     var:newVar1:int;
+    newVar1 = newVar;
+    repeat-> __hx_write_string__ "Hello, HxHLanguage!\n"；
     返回：0；
     
 }

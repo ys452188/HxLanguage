@@ -16,13 +16,12 @@ enum {
     // OP_LOAD_CONST <constantIndex>
     OP_LOAD_VAR,   // 加载变量至栈顶
     OP_POP,        // 弹出
-    OP_STORE_VAR,  // 将栈顶值存入变量
-    OP_DEF_VAR,    // 为变量开辟内存空间 OP_DEF_VAR <memorySize(u32)>
+    OP_STORE_VAR,  // 将栈顶值存入变量  OP_STORE_VAR <offest(u32)> <copySize(u32)>
     OP_ADD,
     OP_SUB,
     OP_MUL,
     OP_DIV,
-    OP_JMP,
+    OP_JMP,        //OP_JMP <instAddr(u32)>
     OP_JMP_CONDITION,  // JMP_CONDITION <栈顶为真时跳转的地址>
     // <为假时跳转的地址(>size时跳转至末尾)>
     OP_CAL,            // CAL <procIndex>(u32) <paramCount>(u32)
@@ -48,7 +47,8 @@ enum {
     PARAM_TYPE_STRING,
     PARAM_TYPE_ADDRESS,
     PARAM_TYPE_INDEX,  // uint32_t 索引常量池或过程表
-    PARAM_TYPE_SIZE    // u32
+    PARAM_TYPE_SIZE,    // u32
+    PARAM_TYPE_OFFEST,  // u32
 };
 typedef struct Param {
     ParamType type;  // char
@@ -184,9 +184,6 @@ static int writeInstruction(Instruction& inst, FILE* file) {
     case OP_PRINT_STRING:
         fwprintf(logStream, L"\33[1;34mOP_PRINT_STRING\33[0m\n");
         break;
-    case OP_DEF_VAR:
-        fwprintf(logStream, L"\33[1;34mOP_DEF_VAR\33[0m)\n");
-        break;
     case OP_LOAD_VAR:
         fwprintf(logStream, L"\33[1;34mOP_LOAD_VAR\33[0m)\n");
         break;
@@ -251,34 +248,36 @@ static int writeInstruction(Instruction& inst, FILE* file) {
     return 0;
 }
 static int writeProcedure(Procedure& proc, FILE* file) noexcept {
-    for(int i = 0; i < proc.instructionSize; i++) {
-        if(proc.instructions.at(i).isNotUsed) {
-            proc.instructionSize--;
-        }    
-    }
+    if(!isInDebugMode) {
+        for(int i = 0; i < proc.instructionSize; i++) {
+            if(proc.instructions.at(i).isNotUsed) {
+                proc.instructionSize--;
+            }
+        }
 #ifdef HX_DEBUG
-    log(L"算得指令数为%d", proc.instructionSize);
+        log(L"算得指令数为%d", proc.instructionSize);
 #endif
+    }
     // 写instructionSize
-    #ifdef HX_DEBUG
+#ifdef HX_DEBUG
     log(L"写instructionSize:%d",proc.instructionSize);
 #endif
     if (fwrite(&(proc.instructionSize), sizeof(uint32_t), 1, file) != 1)
         return -1;
     // 写instructions
-    #ifdef HX_DEBUG
+#ifdef HX_DEBUG
     log(L"写instructions");
 #endif
     for (int i = 0; i < proc.instructions.size(); i++) {
         if (writeInstruction(proc.instructions.at(i), file)) return -1;
     }
     // stackSize
-    #ifdef HX_DEBUG
+#ifdef HX_DEBUG
     log(L"写stackSize:%d",proc.stackSize);
 #endif
     if (fwrite(&(proc.stackSize), sizeof(uint32_t), 1, file) != 1) return -1;
     // localVarSize
-    #ifdef HX_DEBUG
+#ifdef HX_DEBUG
     log(L"写localVarSize:%d",proc.localVarSize);
 #endif
     if (fwrite(&(proc.localVarSize), sizeof(uint32_t), 1, file) != 1) return -1;

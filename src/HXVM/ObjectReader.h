@@ -15,13 +15,12 @@ enum {
     // OP_LOAD_CONST <constantIndex>
     OP_LOAD_VAR,   // 加载变量至栈顶
     OP_POP,        // 弹出
-    OP_STORE_VAR,  // 将栈顶值存入变量
-    OP_DEF_VAR,    // 为变量开辟内存空间 OP_DEF_VAR <memorySize(u32)>
+    OP_STORE_VAR,  // 将栈顶值存入变量  OP_STORE_VAR <offest(u32)> <copySize(u32)>
     OP_ADD,
     OP_SUB,
     OP_MUL,
     OP_DIV,
-    OP_JMP,
+    OP_JMP,        //OP_JMP <instAddr(u32)>
     OP_JMP_CONDITION,  // JMP_CONDITION <栈顶为真时跳转的地址>
     // <为假时跳转的地址(>size时跳转至末尾)>
     OP_CAL,            // CAL <procIndex>(u32) <paramCount>(u32)
