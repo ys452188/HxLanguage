@@ -1,4 +1,4 @@
-#define HX_DEBUG
+#include "config.h"
 #define HXC_VERSION 0.114f
 bool isInDebugMode = true;
 #include <errno.h>
@@ -12,8 +12,7 @@ bool isInDebugMode = true;
 #include <io.h>
 #endif
 
-#define log(msg, ...) \
-  fwprintf(logStream, L"\33[33m[DEB]\33[0m" msg L"\n", ##__VA_ARGS__)
+#define log(msg, ...) fwprintf(logStream, L"\33[33m[DEB]\33[0m" msg L"\n", ##__VA_ARGS__)
 FILE* outputStream = NULL;
 FILE* logStream = NULL;
 FILE* errorStream = NULL;
@@ -117,8 +116,7 @@ int main(int argc, char* argv[]) {
         freeTokens(&tokens);
         freeObjectCode(&objCode);
         end = clock();
-        fwprintf(outputStream, L"\33[1;34m[INFO]\33[0m编译完成。共耗时%lfs\n",
-                 (double)(end - start) / CLOCKS_PER_SEC);
+        fwprintf(outputStream, L"\33[1;34m[INFO]\33[0m编译完成。共耗时%lfs\n", (double)(end - start) / CLOCKS_PER_SEC);
         return 0;
     } catch (std::bad_alloc e) {
         fwprintf(errorStream, L"\33[31m[ERR]\33[0m内存分配失败！\n");

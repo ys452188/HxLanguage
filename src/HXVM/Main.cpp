@@ -1,4 +1,6 @@
-#define HX_DEBUG
+#include "config.h"
+#include <atomic>
+std::atomic<bool> shouldExit {false};   //要退出吗，用于处理SIGINT
 #define OP_STACK_SIZE 512  // 操作数栈大小
 #define HXVM_VERSION 0.114f
 #define ERR_LABEL L"\33[1;31m[E]\33[0m"
@@ -10,6 +12,8 @@ inline void initLocale(void);
 #include <locale.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <csignal>
+#include <chrono>
 #include <time.h>
 
 #include "HxVector.h"
@@ -21,6 +25,7 @@ inline void initLocale(void);
 
 #include "Interpreter.h"
 #include "ObjectReader.h"
+static void signalHandler(int signalNumber);
 extern int interpret(ObjectCode&, int& err) noexcept;
 typedef struct InterpretData {
     int* err;
@@ -33,6 +38,8 @@ void* interpret_packed(void* dataPtr) {
     return NULL;
 }
 int main(int argc, char** argv) {
+    // 注册 Ctrl+C 信号
+    std::signal(SIGINT, signalHandler);
     clock_t start, end;
     start = clock();
     initLocale();
@@ -60,22 +67,25 @@ int main(int argc, char** argv) {
     data.obj = &objCode;
     data.ret = &ret;
     if (pthread_create(&mainThread, NULL, interpret_packed, &data)) {
-        fwprintf(errorStream, ERR_LABEL L"寄！线程创建失败！共存活%lfs\n",
-                 (double)(end - start) / CLOCKS_PER_SEC);
+        fwprintf(errorStream, ERR_LABEL L"寄！线程创建失败！共存活%lfs\n", (double)(end - start) / CLOCKS_PER_SEC);
     }
     pthread_join(mainThread, NULL);
     if (err || ret) {
         end = clock();
-        fwprintf(errorStream, ERR_LABEL L"寄！运行时发生异常！共存活%lfs\n",
-                 (double)(end - start) / CLOCKS_PER_SEC);
+        fwprintf(errorStream, ERR_LABEL L"寄！运行时发生异常！共存活%lfs\n", (double)(end - start) / CLOCKS_PER_SEC);
         return -1;
     }
     freeObjectCode(objCode);
 
     end = clock();
-    wprintf(INFO_LABEL L"结束 耗时%lfs\n",
-            (double)(end - start) / CLOCKS_PER_SEC);
+    wprintf(INFO_LABEL L"结束 耗时%lfs\n", (double)(end - start) / CLOCKS_PER_SEC);
     return 0;
+}
+void signalHandler(int signalNumber) {
+    if (signalNumber == SIGINT) {
+        wprintf(INFO_LABEL L"\33[1;31m不......不要停♡\33[0m\n");
+        shouldExit.store(true);
+    }
 }
 void initLocale(void) {
     // 设置Locale

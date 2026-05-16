@@ -50,7 +50,6 @@ typedef struct ASTNode {
     Token* token;  // 用于错误定位
 } ASTNode;
 
-
 #ifdef HX_DEBUG
 // 递归往下找树枝的辅助函数
 static void printAstNode(ASTNode* node, int level) {
@@ -64,67 +63,68 @@ static void printAstNode(ASTNode* node, int level) {
     }
 
     switch (node->kind) {
-    case NODE_VALUE:
-        fwprintf(logStream, L"\033[1;32m[Value]\033[0m ");
-        if (node->data.value.type.kind == IR_DT_INT) {
-            fwprintf(logStream, L"INT: %d\n", node->data.value.val.i);
-        } else if (node->data.value.type.kind == IR_DT_FLOAT) {
-            fwprintf(logStream, L"FLOAT: %f\n", node->data.value.val.f);
-        } else if (node->data.value.type.kind == IR_DT_CHAR) {
-            fwprintf(logStream, L"CHAR: '%lc'\n", (wchar_t)node->data.value.val.c);
-        } else if (node->data.value.type.kind == IR_DT_STRING) {
-            fwprintf(logStream, L"STRING: \"%ls\"\n", node->data.value.val.s);
-        } else {
-            fwprintf(logStream, L"UNKNOWN TYPE\n");
-        }
-        break;
+        case NODE_VALUE:
+            fwprintf(logStream, L"\033[1;32m[Value]\033[0m ");
+            if (node->data.value.type.kind == IR_DT_INT) {
+                fwprintf(logStream, L"INT: %d\n", node->data.value.val.i);
+            } else if (node->data.value.type.kind == IR_DT_FLOAT) {
+                fwprintf(logStream, L"FLOAT: %f\n", node->data.value.val.f);
+            } else if (node->data.value.type.kind == IR_DT_CHAR) {
+                fwprintf(logStream, L"CHAR: '%lc'\n", (wchar_t)node->data.value.val.c);
+            } else if (node->data.value.type.kind == IR_DT_STRING) {
+                fwprintf(logStream, L"STRING: \"%ls\"\n", node->data.value.val.s);
+            } else {
+                fwprintf(logStream, L"UNKNOWN TYPE\n");
+            }
+            break;
 
-    case NODE_VAR:
-        fwprintf(logStream, L"\033[1;33m[Var]\033[0m name: %ls, index: %d\n", node->data.var.name, node->data.var.index);
-        break;
+        case NODE_VAR:
+            fwprintf(logStream, L"\033[1;33m[Var]\033[0m name: %ls, index: %d\n", node->data.var.name, node->data.var.index);
+            break;
 
-    case NODE_UNARY:
-        fwprintf(logStream, L"\033[1;35m[Unary]\033[0m op: %d\n", node->data.unary.op);
-        printAstNode(node->left, level + 1);
-        break;
+        case NODE_UNARY:
+            fwprintf(logStream, L"\033[1;35m[Unary]\033[0m op: %d\n", node->data.unary.op);
+            printAstNode(node->left, level + 1);
+            break;
 
-    case NODE_BINARY:
-        fwprintf(logStream, L"\033[1;36m[Binary]\033[0m op: ");
-        switch (node->data.binary.op) {
-        case 0:
-            fwprintf(logStream, L"ADD (+)\n");
+        case NODE_BINARY:
+            fwprintf(logStream, L"\033[1;36m[Binary]\033[0m op: ");
+            switch (node->data.binary.op) {
+                case 0:
+                    fwprintf(logStream, L"ADD (+)\n");
+                    break;
+                case 1:
+                    fwprintf(logStream, L"SUB (-)\n");
+                    break;
+                case 2:
+                    fwprintf(logStream, L"MUL (*)\n");
+                    break;
+                case 3:
+                    fwprintf(logStream, L"DIV (/)\n");
+                    break;
+                case 4:
+                    fwprintf(logStream, L"SET (=)\n");
+                    break;
+                case 5:
+                    fwprintf(logStream, L"STRING_CONCAT\n");
+                    break;
+                default:
+                    fwprintf(logStream, L"UNKNOWN (%d)\n", node->data.binary.op);
+            }
+            printAstNode(node->left, level + 1);
+            printAstNode(node->right, level + 1);
             break;
-        case 1:
-            fwprintf(logStream, L"SUB (-)\n");
+
+        case NODE_FUN_CALL:
+            fwprintf(logStream, L"\033[1;34m[FunCall]\033[0m name: %ls, args: %u\n", node->data.funCall.name,
+                     node->data.funCall.arg_count);
+            for (uint32_t i = 0; i < node->data.funCall.arg_count; i++) {
+                printAstNode(node->data.funCall.args[i], level + 1);
+            }
             break;
-        case 2:
-            fwprintf(logStream, L"MUL (*)\n");
-            break;
-        case 3:
-            fwprintf(logStream, L"DIV (/)\n");
-            break;
-        case 4:
-            fwprintf(logStream, L"SET (=)\n");
-            break;
-        case 5:
-            fwprintf(logStream, L"STRING_CONCAT\n");
-            break;
+
         default:
-            fwprintf(logStream, L"UNKNOWN (%d)\n", node->data.binary.op);
-        }
-        printAstNode(node->left, level + 1);
-        printAstNode(node->right, level + 1);
-        break;
-
-    case NODE_FUN_CALL:
-        fwprintf(logStream, L"\033[1;34m[FunCall]\033[0m name: %ls, args: %u\n", node->data.funCall.name, node->data.funCall.arg_count);
-        for (uint32_t i = 0; i < node->data.funCall.arg_count; i++) {
-            printAstNode(node->data.funCall.args[i], level + 1);
-        }
-        break;
-
-    default:
-        fwprintf(logStream, L"\033[1;31m[未知]\033[0m\n");
+            fwprintf(logStream, L"\033[1;31m[未知]\033[0m\n");
     }
 }
 extern void printAST(ASTNode* root) {
@@ -138,17 +138,15 @@ extern void printAST(ASTNode* root) {
 }
 #endif
 
-extern ASTNode* parseExpression(Token* exp, int* index, int size,
-                                FunCallPitchTable& pitchTable,
-                                SymbolTable* table, int* err) noexcept;
+extern ASTNode* parseExpression(Token* exp, int* index, int size, FunCallPitchTable& pitchTable, SymbolTable* table,
+                                int* err) noexcept;
 
 void freeAST(ASTNode* node) noexcept {
     if (!node) return;
     freeAST(node->left);
     freeAST(node->right);
     if (node->kind == NODE_VAR) free(node->data.var.name);
-    if (node->kind == NODE_VALUE && node->data.value.type.kind == IR_DT_STRING)
-        free(node->data.value.val.s);
+    if (node->kind == NODE_VALUE && node->data.value.type.kind == IR_DT_STRING) free(node->data.value.val.s);
     free(node);
 }
 static int getVarIndex(const wchar_t* name, SymbolTable* table) {
@@ -163,16 +161,13 @@ static int getPrec(HxTokenType t) noexcept {
     if (t == TOK_OPR_SET) return 0;
     return -1;
 }
-static ASTNode* parsePrimary(Token* tokens, int* index, int size,
-                             FunCallPitchTable& pitchTable, SymbolTable* table,
+static ASTNode* parsePrimary(Token* tokens, int* index, int size, FunCallPitchTable& pitchTable, SymbolTable* table,
                              int* err) noexcept;
-static ASTNode* parseExprRec(Token* tokens, int* index, int size,
-                             FunCallPitchTable& pitchTable, SymbolTable* table,
-                             int* err, int min_prec) noexcept;
+static ASTNode* parseExprRec(Token* tokens, int* index, int size, FunCallPitchTable& pitchTable, SymbolTable* table, int* err,
+                             int min_prec) noexcept;
 
 // 解析数字、变量、括号
-static ASTNode* parsePrimary(Token* tokens, int* index, int size,
-                             FunCallPitchTable& pitchTable, SymbolTable* table,
+static ASTNode* parsePrimary(Token* tokens, int* index, int size, FunCallPitchTable& pitchTable, SymbolTable* table,
                              int* err) noexcept {
     if (*index >= size) {
         *err = 255;
@@ -197,32 +192,28 @@ static ASTNode* parsePrimary(Token* tokens, int* index, int size,
         bool isCast = false;
         IR_DataType castType;
 
-        if (wcscmp(tokens[*index].value, L"int") == 0 ||
-                wcscmp(tokens[*index].value, L"整型") == 0) {
+        if (wcscmp(tokens[*index].value, L"int") == 0 || wcscmp(tokens[*index].value, L"整型") == 0) {
             castType.kind = IR_DT_INT;
             isCast = true;
-        } else if (wcscmp(tokens[*index].value, L"float") == 0 ||
-                   wcscmp(tokens[*index].value, L"浮点型") == 0) {
+        } else if (wcscmp(tokens[*index].value, L"float") == 0 || wcscmp(tokens[*index].value, L"浮点型") == 0) {
             castType.kind = IR_DT_FLOAT;
             isCast = true;
-        } else if (wcscmp(tokens[*index].value, L"char") == 0 ||
-                   wcscmp(tokens[*index].value, L"字符型") == 0) {
+        } else if (wcscmp(tokens[*index].value, L"char") == 0 || wcscmp(tokens[*index].value, L"字符型") == 0) {
             castType.kind = IR_DT_CHAR;
             isCast = true;
-        } else if (wcscmp(tokens[*index].value, L"str") == 0 ||
-                   wcscmp(tokens[*index].value, L"字符串型") == 0) {
+        } else if (wcscmp(tokens[*index].value, L"str") == 0 || wcscmp(tokens[*index].value, L"字符串型") == 0) {
             castType.kind = IR_DT_STRING;
             isCast = true;
         }
 
         // 如果结构匹配 (type)
-        if (isCast && (*index + 1 < size) &&
-                tokens[*index + 1].type == TOK_OPR_RQUOTE) {
-            *index += 2;  // 跳过类型关键字和右括号 ')'，此时指向后面的表达式
+        if (isCast && (*index + 1 < size) && tokens[*index + 1].type == TOK_OPR_RQUOTE) {
+            *index += 2;  // 跳过类型关键字和右括号
+                          // ')'，此时指向后面的表达式
 
-            // 解析后面的表达式 (调用 parsePrimary 可以同时支持 (int)a 和 (int)(a+b))
-            ASTNode* inner =
-                parsePrimary(tokens, index, size, pitchTable, table, err);
+            // 解析后面的表达式 (调用 parsePrimary 可以同时支持
+            // (int)a 和 (int)(a+b))
+            ASTNode* inner = parsePrimary(tokens, index, size, pitchTable, table, err);
             if (*err != 0 || !inner) return NULL;
 
             // 对比实际类型与目标类型，若不同则打上转换指令标签
@@ -238,8 +229,7 @@ static ASTNode* parsePrimary(Token* tokens, int* index, int size,
                     else if (inner->resultType.kind == IR_DT_CHAR)
                         inner->typeCast = OP_CHAR_TO_FLOAT;
                 } else if (castType.kind == IR_DT_CHAR) {
-                    if (inner->resultType.kind == IR_DT_INT)
-                        inner->typeCast = OP_INT_TO_CHAR;
+                    if (inner->resultType.kind == IR_DT_INT) inner->typeCast = OP_INT_TO_CHAR;
                 }
 
                 inner->resultType = castType;
@@ -248,16 +238,15 @@ static ASTNode* parsePrimary(Token* tokens, int* index, int size,
 
         } else {
             // 不是强制转换，而是普通的算术括号表达式 (expr)
-            ASTNode* inner =
-                parseExprRec(tokens, index, size, pitchTable, table, err, 0);
-            if (*err == 0 &&
-                    (*index < size && tokens[*index].type == TOK_OPR_RQUOTE)) {
+            ASTNode* inner = parseExprRec(tokens, index, size, pitchTable, table, err, 0);
+            if (*err == 0 && (*index < size && tokens[*index].type == TOK_OPR_RQUOTE)) {
                 (*index)++;  // 吃掉右括号
                 return inner;
             }
             if (*err == 0) {
                 *err = 255;
-                setError(ERR_EXP, tokens[*index].line, NULL);  // 缺少右括号
+                setError(ERR_EXP, tokens[*index].line,
+                         NULL);  // 缺少右括号
             }
             return NULL;
         }
@@ -288,7 +277,7 @@ static ASTNode* parsePrimary(Token* tokens, int* index, int size,
 
     // 处理变量
     if (curr->type == TOK_ID) {
-        //先不管有没有等号，统一先把当前标识符解析成变量节点
+        // 先不管有没有等号，统一先把当前标识符解析成变量节点
         node->kind = NODE_VAR;
         node->data.var.name = wcsdup(curr->value);
         int symIdx = getVarIndex(node->data.var.name, table);
@@ -324,21 +313,19 @@ static ASTNode* parsePrimary(Token* tokens, int* index, int size,
                         argIndex++;
                         continue;
                     }
-                    ASTNode* arg =
-                        parseExpression(tokens, &argIndex, size, pitchTable, table, err);
+                    ASTNode* arg = parseExpression(tokens, &argIndex, size, pitchTable, table, err);
                     if (*err != 0) {
                         freeAST(funCallNode);
                         return NULL;
                     }
                     funCallNode->data.funCall.args = (ASTNode**)realloc(
-                                                         funCallNode->data.funCall.args,
-                                                         sizeof(ASTNode*) * (funCallNode->data.funCall.arg_count + 1));
-                    funCallNode->data.funCall.args[funCallNode->data.funCall.arg_count] =
-                        arg;
+                        funCallNode->data.funCall.args, sizeof(ASTNode*) * (funCallNode->data.funCall.arg_count + 1));
+                    funCallNode->data.funCall.args[funCallNode->data.funCall.arg_count] = arg;
                     funCallNode->data.funCall.arg_count++;
                 }
                 if (tokens[argIndex].type != TOK_OPR_RQUOTE) {
-                    setError(ERR_EXP, curr->line, curr->value);  // 报错：期待表达式
+                    setError(ERR_EXP, curr->line,
+                             curr->value);  // 报错：期待表达式
                     *err = 255;
                     freeAST(funCallNode);
                     return NULL;
@@ -359,15 +346,12 @@ static ASTNode* parsePrimary(Token* tokens, int* index, int size,
                             }
                             bool match = true;
                             for (int j = 0; j < funCallNode->data.funCall.arg_count; j++) {
-                                if (funCallNode->data.funCall.args[j]->resultType.kind !=
-                                        f->params[j].type.kind) {
+                                if (funCallNode->data.funCall.args[j]->resultType.kind != f->params[j].type.kind) {
                                     match = false;
                                     break;
                                 }
-                                if (funCallNode->data.funCall.args[j]->resultType.kind ==
-                                        IR_DT_CUSTOM) {
-                                    if (wcscmp(funCallNode->data.funCall.args[j]
-                                               ->resultType.customTypeName,
+                                if (funCallNode->data.funCall.args[j]->resultType.kind == IR_DT_CUSTOM) {
+                                    if (wcscmp(funCallNode->data.funCall.args[j]->resultType.customTypeName,
                                                f->params[j].type.customTypeName) != 0) {
                                         match = false;
                                         break;
@@ -375,7 +359,8 @@ static ASTNode* parsePrimary(Token* tokens, int* index, int size,
                                 }
                             }
                             if (match) {
-                                // f->isUsed = true;
+                                // f->isUsed =
+                                // true;
                                 funCallNode->data.funCall.pitch = pitchTable.enter(f);
                                 funCallNode->data.funCall.pitch->fun = f;
                                 f->pitch = funCallNode->data.funCall.pitch;
@@ -385,33 +370,31 @@ static ASTNode* parsePrimary(Token* tokens, int* index, int size,
                             }
                         }
                     }
-                    setError(ERR_CANNOT_FIND_SYMBOL, funCallNode->token->line,
-                             funCallNode->data.funCall.name);
+                    setError(ERR_CANNOT_FIND_SYMBOL, funCallNode->token->line, funCallNode->data.funCall.name);
                     *err = 255;
                     return NULL;
                 } else {
-                    setError(ERR_CANNOT_FIND_SYMBOL, funCallNode->token->line,
-                             funCallNode->data.funCall.name);
+                    setError(ERR_CANNOT_FIND_SYMBOL, funCallNode->token->line, funCallNode->data.funCall.name);
                     *err = 255;
                     return NULL;
                 }
                 return funCallNode;
             }
-            //赋值
+            // 赋值
             else if (next->type == TOK_OPR_SET) {
-                if(symIdx == -1) {
+                if (symIdx == -1) {
                     setError(ERR_CANNOT_FIND_SYMBOL, curr->line, curr->value);
                     *err = 255;
                     freeAST(node);
                     return NULL;
                 }
-                (*index)++; //tokens[*index] == next == SET
+                (*index)++;  // tokens[*index] == next == SET
                 if (*index + 1 >= size) {
                     setError(ERR_EXP, curr->line, curr->value);
                     *err = 255;
                     return NULL;
                 }
-                (*index)++;    //tokens[*index] == 等号右边
+                (*index)++;  // tokens[*index] == 等号右边
                 ASTNode* movNode = (ASTNode*)calloc(1, sizeof(ASTNode));
                 if (!movNode) {
                     *err = -1;
@@ -422,14 +405,14 @@ static ASTNode* parsePrimary(Token* tokens, int* index, int size,
                 movNode->data.binary.op = 4;
 
                 movNode->left = node;
-                //连等支持
+                // 连等支持
                 movNode->right = parseExprRec(tokens, index, size, pitchTable, table, err, getPrec(TOK_OPR_SET));
 
                 if (*err) {
                     free(movNode);
                     return NULL;
                 }
-                //类型推导
+                // 类型推导
                 movNode->resultType = movNode->right->resultType;
 
                 return movNode;
@@ -451,8 +434,7 @@ static ASTNode* parsePrimary(Token* tokens, int* index, int size,
     free(node);
     return NULL;
 }
-IR_DataType getResultTypeForBinaryOp(IR_DataType left,
-                                     IR_DataType right) noexcept {
+IR_DataType getResultTypeForBinaryOp(IR_DataType left, IR_DataType right) noexcept {
     // 类型提升
     if (left.kind == IR_DT_STRING || right.kind == IR_DT_STRING) {
         IR_DataType res;
@@ -469,9 +451,8 @@ IR_DataType getResultTypeForBinaryOp(IR_DataType left,
     }
 }
 // 优先级爬升
-ASTNode* parseExprRec(Token* tokens, int* index, int size,
-                      FunCallPitchTable& pitchTable, SymbolTable* table,
-                      int* err, int min_prec) noexcept {
+ASTNode* parseExprRec(Token* tokens, int* index, int size, FunCallPitchTable& pitchTable, SymbolTable* table, int* err,
+                      int min_prec) noexcept {
     ASTNode* lhs = parsePrimary(tokens, index, size, pitchTable, table, err);
     if (*err != 0 || lhs == NULL) return lhs;
 
@@ -483,12 +464,12 @@ ASTNode* parseExprRec(Token* tokens, int* index, int size,
         // 消耗掉运算符
         (*index)++;
         // 递归解析右侧操作数
-        ASTNode* rhs =
-            parseExprRec(tokens, index, size, pitchTable, table, err, prec + 1);
+        ASTNode* rhs = parseExprRec(tokens, index, size, pitchTable, table, err, prec + 1);
 
         if (rhs == NULL) {
             if (*err == 0) *err = 255;
-            setError(ERR_EXP, opTok->line, opTok->value);  // 报错：期待表达式
+            setError(ERR_EXP, opTok->line,
+                     opTok->value);  // 报错：期待表达式
             if (lhs) freeAST(lhs);
             return NULL;
         }
@@ -505,100 +486,96 @@ ASTNode* parseExprRec(Token* tokens, int* index, int size,
         combined->left = lhs;
         combined->right = rhs;
         combined->token = opTok;
-        combined->resultType =
-            getResultTypeForBinaryOp(lhs->resultType, rhs->resultType);
+        combined->resultType = getResultTypeForBinaryOp(lhs->resultType, rhs->resultType);
         if (lhs->resultType.kind != rhs->resultType.kind) {
-            if (combined->left->resultType.kind == IR_DT_STRING ||
-                    combined->right->resultType.kind == IR_DT_STRING) {
+            if (combined->left->resultType.kind == IR_DT_STRING || combined->right->resultType.kind == IR_DT_STRING) {
                 ASTNode* node = combined->left;
                 switch (node->resultType.kind) {
-                case IR_DT_INT:
-                    node->typeCast = OP_INT_TO_STRING;
-                    break;
-                case IR_DT_FLOAT:
-                    node->typeCast = OP_INT_TO_STRING;
-                    break;
-                case IR_DT_CHAR:
-                    node->typeCast = OP_CHAR_TO_STRING;
-                    break;
-                case IR_DT_BOOL:
-                    node->typeCast = OP_INT_TO_STRING;
-                    break;
-                case IR_DT_STRING:
-                    break;
+                    case IR_DT_INT:
+                        node->typeCast = OP_INT_TO_STRING;
+                        break;
+                    case IR_DT_FLOAT:
+                        node->typeCast = OP_INT_TO_STRING;
+                        break;
+                    case IR_DT_CHAR:
+                        node->typeCast = OP_CHAR_TO_STRING;
+                        break;
+                    case IR_DT_BOOL:
+                        node->typeCast = OP_INT_TO_STRING;
+                        break;
+                    case IR_DT_STRING:
+                        break;
                 }
                 node = combined->right;
                 switch (node->resultType.kind) {
-                case IR_DT_INT:
-                    node->typeCast = OP_INT_TO_STRING;
-                    break;
-                case IR_DT_FLOAT:
-                    node->typeCast = OP_INT_TO_STRING;
-                    break;
-                case IR_DT_CHAR:
-                    node->typeCast = OP_CHAR_TO_STRING;
-                    break;
-                case IR_DT_BOOL:
-                    node->typeCast = OP_INT_TO_STRING;
-                    break;
-                case IR_DT_STRING:
-                    break;
+                    case IR_DT_INT:
+                        node->typeCast = OP_INT_TO_STRING;
+                        break;
+                    case IR_DT_FLOAT:
+                        node->typeCast = OP_INT_TO_STRING;
+                        break;
+                    case IR_DT_CHAR:
+                        node->typeCast = OP_CHAR_TO_STRING;
+                        break;
+                    case IR_DT_BOOL:
+                        node->typeCast = OP_INT_TO_STRING;
+                        break;
+                    case IR_DT_STRING:
+                        break;
                 }
-            } else if (combined->left->resultType.kind == IR_DT_FLOAT ||
-                       combined->right->resultType.kind == IR_DT_FLOAT) {
+            } else if (combined->left->resultType.kind == IR_DT_FLOAT || combined->right->resultType.kind == IR_DT_FLOAT) {
                 ASTNode* node = combined->left;
                 switch (node->resultType.kind) {
-                case IR_DT_INT:
-                    node->typeCast = OP_INT_TO_FLOAT;
-                    break;
-                case IR_DT_FLOAT:
-                    break;
-                case IR_DT_CHAR:
-                    node->typeCast = OP_CHAR_TO_FLOAT;
-                    break;
-                case IR_DT_BOOL:
-                    node->typeCast = OP_INT_TO_FLOAT;
-                    break;
+                    case IR_DT_INT:
+                        node->typeCast = OP_INT_TO_FLOAT;
+                        break;
+                    case IR_DT_FLOAT:
+                        break;
+                    case IR_DT_CHAR:
+                        node->typeCast = OP_CHAR_TO_FLOAT;
+                        break;
+                    case IR_DT_BOOL:
+                        node->typeCast = OP_INT_TO_FLOAT;
+                        break;
                 }
                 node = combined->right;
                 switch (node->resultType.kind) {
-                case IR_DT_INT:
-                    node->typeCast = OP_INT_TO_FLOAT;
-                    break;
-                case IR_DT_FLOAT:
-                    break;
-                case IR_DT_CHAR:
-                    node->typeCast = OP_CHAR_TO_FLOAT;
-                    break;
-                case IR_DT_BOOL:
-                    node->typeCast = OP_INT_TO_FLOAT;
-                    break;
+                    case IR_DT_INT:
+                        node->typeCast = OP_INT_TO_FLOAT;
+                        break;
+                    case IR_DT_FLOAT:
+                        break;
+                    case IR_DT_CHAR:
+                        node->typeCast = OP_CHAR_TO_FLOAT;
+                        break;
+                    case IR_DT_BOOL:
+                        node->typeCast = OP_INT_TO_FLOAT;
+                        break;
                 }
-            } else if (combined->left->resultType.kind == IR_DT_INT ||
-                       combined->right->resultType.kind == IR_DT_INT) {
+            } else if (combined->left->resultType.kind == IR_DT_INT || combined->right->resultType.kind == IR_DT_INT) {
                 ASTNode* node = combined->left;
                 switch (node->resultType.kind) {
-                case IR_DT_INT:
-                    break;
-                case IR_DT_FLOAT:
-                    break;
-                case IR_DT_CHAR:
-                    node->typeCast = OP_CHAR_TO_INT;
-                    break;
-                case IR_DT_BOOL:
-                    break;
+                    case IR_DT_INT:
+                        break;
+                    case IR_DT_FLOAT:
+                        break;
+                    case IR_DT_CHAR:
+                        node->typeCast = OP_CHAR_TO_INT;
+                        break;
+                    case IR_DT_BOOL:
+                        break;
                 }
                 node = combined->right;
                 switch (node->resultType.kind) {
-                case IR_DT_INT:
-                    break;
-                case IR_DT_FLOAT:
-                    break;
-                case IR_DT_CHAR:
-                    node->typeCast = OP_CHAR_TO_INT;
-                    break;
-                case IR_DT_BOOL:
-                    break;
+                    case IR_DT_INT:
+                        break;
+                    case IR_DT_FLOAT:
+                        break;
+                    case IR_DT_CHAR:
+                        node->typeCast = OP_CHAR_TO_INT;
+                        break;
+                    case IR_DT_BOOL:
+                        break;
                 }
             }
         }
@@ -631,14 +608,12 @@ ASTNode* parseExprRec(Token* tokens, int* index, int size,
             }
         } else if (opTok->type == TOK_OPR_SET) {
             combined->data.binary.op = 4;
-
         }
         lhs = combined;
     }
     return lhs;
 }
-ASTNode* parseExpression(Token* exp, int* index, int size,
-                         FunCallPitchTable& pitchTable, SymbolTable* table,
+ASTNode* parseExpression(Token* exp, int* index, int size, FunCallPitchTable& pitchTable, SymbolTable* table,
                          int* err) noexcept {
 #ifdef HX_DEBUG
     log(L"\n---------分析表达式");

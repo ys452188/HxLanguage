@@ -1,6 +1,47 @@
 cmake_minimum_required(VERSION 3.5)
 project(HxLanguage VERSION 0.114)
 
+########配置文件
+set(CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/config.txt")
+
+if(EXISTS ${CONFIG_FILE})
+    message(STATUS "发现配置文件: ${CONFIG_FILE}，正在加载喵~")
+    # 按行读取文件
+    file(STRINGS ${CONFIG_FILE} CONFIG_LINES)
+    foreach(LINE IN LISTS CONFIG_LINES)
+        # 忽略注释行和空行
+        if(NOT LINE MATCHES "^#" AND NOT LINE STREQUAL "")
+            # 解析 KEY=VALUE 的结构
+            string(REGEX MATCH "([^=]+)=(.*)" EACH_CONF ${LINE})
+            set(KEY ${CMAKE_MATCH_1})
+            set(VAL ${CMAKE_MATCH_2})
+            
+            # 把解析出来的配置注册到 CMake 变量里
+            set(${KEY} ${VAL})
+            message(STATUS "  配置项: ${KEY} -> ${VAL}")
+        endif()
+    endforeach()
+else()
+    set(HX_DEBUG ON)
+    message(WARNING "未找到config.txt喵，使用默认配置喵")
+endif()
+
+if(HX_DEBUG STREQUAL "ON")
+    set(HX_DEBUG_MACRO 1) 
+else()
+    unset(HX_DEBUG_MACRO) 
+endif()
+
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/config.h.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/HXC/config.h"
+)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/config.h.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/HXVM/config.h"
+)
+#################
+
 if(MSVC)
     add_compile_options(/Zp1)
 else()
@@ -21,9 +62,9 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL 
     add_definitions("-falign-functions=64")
 endif()
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-    # 强制使用全局动态 TLS 模型，这通常能绕过对齐检查的硬限制
+    # 强制使用全局动态 TLS 模型
     target_compile_options(hxvm PRIVATE "-ftls-model=global-dynamic")
     
-    # 告诉链接器不要过于激进地压缩段
+    #链接器不过于激进地压缩段
     target_link_options(hxvm PRIVATE "-Wl,-z,common-page-size=65536" "-Wl,-z,max-page-size=65536")
 endif()

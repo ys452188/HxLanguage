@@ -12,19 +12,21 @@
 typedef uint8_t Opcode;
 enum {
     OP_NOP = 0,
-    OP_LOAD_CONST,  // 加载常量至栈顶 OP_LOAD_CONST <paramType> <paramValue> |
+    OP_LOAD_CONST,  // 加载常量至栈顶 OP_LOAD_CONST <paramType> <paramValue>
+                    // |
     // OP_LOAD_CONST <constantIndex>
     OP_LOAD_VAR,   // 加载变量至栈顶
     OP_POP,        // 弹出
-    OP_STORE_VAR,  // 将栈顶值存入变量  OP_STORE_VAR <offest(u32)> <copySize(u32)>
+    OP_STORE_VAR,  // 将栈顶值存入变量  OP_STORE_VAR <offest(u32)>
+                   // <copySize(u32)>
     OP_ADD,
     OP_SUB,
     OP_MUL,
     OP_DIV,
-    OP_JMP,        //OP_JMP <instAddr(u32)>
+    OP_JMP,            // OP_JMP <instAddr(u32)>
     OP_JMP_CONDITION,  // JMP_CONDITION <栈顶为真时跳转的地址>
     // <为假时跳转的地址(>size时跳转至末尾)>
-    OP_CAL,            // CAL <procIndex>(u32) <paramCount>(u32)
+    OP_CAL,  // CAL <procIndex>(u32) <paramCount>(u32)
     OP_RET,
     OP_PRINT_STRING,
     // 类型转换
@@ -46,7 +48,7 @@ enum {
     PARAM_TYPE_BOOL,
     PARAM_TYPE_STRING,
     PARAM_TYPE_ADDRESS,
-    PARAM_TYPE_INDEX,  // uint32_t 索引常量池或过程表
+    PARAM_TYPE_INDEX,   // uint32_t 索引常量池或过程表
     PARAM_TYPE_SIZE,    // u32
     PARAM_TYPE_OFFEST,  // u32
 };
@@ -119,11 +121,8 @@ static int writeHeader(FILE* file) noexcept {
     header.version = HXC_VERSION;
     header.isInDebugMode = (uint8_t)isInDebugMode;
     if (fwrite(&(header.magic), sizeof(header.magic), 1, file) != 1) return -1;
-    if (fwrite(&(header.version), sizeof(header.version), 1, file) != 1)
-        return -1;
-    if (fwrite(&(header.isInDebugMode), sizeof(header.isInDebugMode), 1, file) !=
-            1)
-        return -1;
+    if (fwrite(&(header.version), sizeof(header.version), 1, file) != 1) return -1;
+    if (fwrite(&(header.isInDebugMode), sizeof(header.isInDebugMode), 1, file) != 1) return -1;
     return 0;
 }
 // 存的是真实大小
@@ -177,66 +176,66 @@ static int writeInstruction(Instruction& inst, FILE* file) {
 #ifdef HX_DEBUG
     fwprintf(logStream, L"写入指令");
     switch (inst.opcode) {
-    case OP_LOAD_CONST: {
-        fwprintf(logStream, L"\33[1;34mOP_LOAD_CONST\33[0m)\n");
-        break;
-    }
-    case OP_PRINT_STRING:
-        fwprintf(logStream, L"\33[1;34mOP_PRINT_STRING\33[0m\n");
-        break;
-    case OP_LOAD_VAR:
-        fwprintf(logStream, L"\33[1;34mOP_LOAD_VAR\33[0m)\n");
-        break;
-    case OP_STORE_VAR:
-        fwprintf(logStream, L"\33[1;34mOP_STORE_VAR\33[0m)\n");
-        break;
-    case OP_ADD:
-        fwprintf(logStream, L"\33[1;34mOP_ADD\33[0m)\n");
-        break;
-    case OP_SUB:
-        fwprintf(logStream, L"\33[1;34mOP_SUB\33[0m)\n");
-        break;
-    case OP_MUL:
-        fwprintf(logStream, L"\33[1;34mOP_MUL\33[0m)\n");
-        break;
-    case OP_DIV:
-        fwprintf(logStream, L"\33[1;34mOP_DIV\33[0m)\n");
-        break;
-    case OP_CAL:
-        fwprintf(logStream, L"\33[1;34mOP_CAL\33[0m)\n");
-        break;
-    case OP_RET:
-        fwprintf(logStream, L"\33[1;34mOP_RET\33[0m)\n");
-        break;
-    case OP_CHAR_TO_INT:
-        fwprintf(logStream, L"\33[1;34m OP_CHAR_TO_INT\33[0m\n");
-        break;
-    case OP_INT_TO_CHAR:
-        fwprintf(logStream, L"\33[1;34m OP_INT_TO_CHAR\33[0m\n");
-        break;
-    case OP_INT_TO_FLOAT:
-        fwprintf(logStream, L"\33[1;34m OP_INT_TO_CHAR\33[0m\n");
-        break;
-    case OP_CHAR_TO_FLOAT:
-        fwprintf(logStream, L"\33[1;34m OP_CHAR_TO_FLOAT\33[0m\n");
-        break;
-    case OP_CHAR_TO_STRING:
-        (logStream, L"\33[1;34m OP_CHAR_TO_STRING\33[0m\n");
-        break;
-    case OP_FLOAT_TO_INT:
-        (logStream, L"\33[1;34m OP_FLOAT_TO_INT\33[0m\n");
-        break;
-    case OP_INT_TO_STRING:
-        fwprintf(logStream, L"\33[1;34m OP_INT_TO_STRING\33[0m\n");
-        break;
-    case OP_POP:
-        fwprintf(logStream, L"\33[1;34m OP_POP\33[0m\n");
-        break;
-    case OP_JMP:
-        fwprintf(logStream, L"\33[1;34m OP_JMP\33[0m\n");
-        break;
-    default:
-        fwprintf(logStream, L"\33[1;31mOP_NOP\33[0m)\n");
+        case OP_LOAD_CONST: {
+            fwprintf(logStream, L"\33[1;34mOP_LOAD_CONST\33[0m)\n");
+            break;
+        }
+        case OP_PRINT_STRING:
+            fwprintf(logStream, L"\33[1;34mOP_PRINT_STRING\33[0m\n");
+            break;
+        case OP_LOAD_VAR:
+            fwprintf(logStream, L"\33[1;34mOP_LOAD_VAR\33[0m)\n");
+            break;
+        case OP_STORE_VAR:
+            fwprintf(logStream, L"\33[1;34mOP_STORE_VAR\33[0m)\n");
+            break;
+        case OP_ADD:
+            fwprintf(logStream, L"\33[1;34mOP_ADD\33[0m)\n");
+            break;
+        case OP_SUB:
+            fwprintf(logStream, L"\33[1;34mOP_SUB\33[0m)\n");
+            break;
+        case OP_MUL:
+            fwprintf(logStream, L"\33[1;34mOP_MUL\33[0m)\n");
+            break;
+        case OP_DIV:
+            fwprintf(logStream, L"\33[1;34mOP_DIV\33[0m)\n");
+            break;
+        case OP_CAL:
+            fwprintf(logStream, L"\33[1;34mOP_CAL\33[0m)\n");
+            break;
+        case OP_RET:
+            fwprintf(logStream, L"\33[1;34mOP_RET\33[0m)\n");
+            break;
+        case OP_CHAR_TO_INT:
+            fwprintf(logStream, L"\33[1;34m OP_CHAR_TO_INT\33[0m\n");
+            break;
+        case OP_INT_TO_CHAR:
+            fwprintf(logStream, L"\33[1;34m OP_INT_TO_CHAR\33[0m\n");
+            break;
+        case OP_INT_TO_FLOAT:
+            fwprintf(logStream, L"\33[1;34m OP_INT_TO_CHAR\33[0m\n");
+            break;
+        case OP_CHAR_TO_FLOAT:
+            fwprintf(logStream, L"\33[1;34m OP_CHAR_TO_FLOAT\33[0m\n");
+            break;
+        case OP_CHAR_TO_STRING:
+            (logStream, L"\33[1;34m OP_CHAR_TO_STRING\33[0m\n");
+            break;
+        case OP_FLOAT_TO_INT:
+            (logStream, L"\33[1;34m OP_FLOAT_TO_INT\33[0m\n");
+            break;
+        case OP_INT_TO_STRING:
+            fwprintf(logStream, L"\33[1;34m OP_INT_TO_STRING\33[0m\n");
+            break;
+        case OP_POP:
+            fwprintf(logStream, L"\33[1;34m OP_POP\33[0m\n");
+            break;
+        case OP_JMP:
+            fwprintf(logStream, L"\33[1;34m OP_JMP\33[0m\n");
+            break;
+        default:
+            fwprintf(logStream, L"\33[1;31mOP_NOP\33[0m)\n");
     }
 #endif
     // 写opcode
@@ -248,9 +247,9 @@ static int writeInstruction(Instruction& inst, FILE* file) {
     return 0;
 }
 static int writeProcedure(Procedure& proc, FILE* file) noexcept {
-    if(!isInDebugMode) {
-        for(int i = 0; i < proc.instructionSize; i++) {
-            if(proc.instructions.at(i).isNotUsed) {
+    if (!isInDebugMode) {
+        for (int i = 0; i < proc.instructionSize; i++) {
+            if (proc.instructions.at(i).isNotUsed) {
                 proc.instructionSize--;
             }
         }
@@ -260,10 +259,9 @@ static int writeProcedure(Procedure& proc, FILE* file) noexcept {
     }
     // 写instructionSize
 #ifdef HX_DEBUG
-    log(L"写instructionSize:%d",proc.instructionSize);
+    log(L"写instructionSize:%d", proc.instructionSize);
 #endif
-    if (fwrite(&(proc.instructionSize), sizeof(uint32_t), 1, file) != 1)
-        return -1;
+    if (fwrite(&(proc.instructionSize), sizeof(uint32_t), 1, file) != 1) return -1;
     // 写instructions
 #ifdef HX_DEBUG
     log(L"写instructions");
@@ -273,12 +271,12 @@ static int writeProcedure(Procedure& proc, FILE* file) noexcept {
     }
     // stackSize
 #ifdef HX_DEBUG
-    log(L"写stackSize:%d",proc.stackSize);
+    log(L"写stackSize:%d", proc.stackSize);
 #endif
     if (fwrite(&(proc.stackSize), sizeof(uint32_t), 1, file) != 1) return -1;
     // localVarSize
 #ifdef HX_DEBUG
-    log(L"写localVarSize:%d",proc.localVarSize);
+    log(L"写localVarSize:%d", proc.localVarSize);
 #endif
     if (fwrite(&(proc.localVarSize), sizeof(uint32_t), 1, file) != 1) return -1;
     return 0;
@@ -287,22 +285,18 @@ int writeObjectCode(FILE* objFile, ObjectCode& obj) noexcept {
     if (!objFile) return -1;
     if (writeHeader(objFile)) return -1;
     // 写ConstantPoolSize
-    if (fwrite(&(obj.constantPool.size), sizeof(uint32_t), 1, objFile) != 1)
-        return -1;
+    if (fwrite(&(obj.constantPool.size), sizeof(uint32_t), 1, objFile) != 1) return -1;
     // 写ConstantPool.constants
     for (int i = 0; i < obj.constantPool.size; i++) {
         // 写tyoe
         char type = (char)(obj.constantPool.constants[i].type);
         if (fwrite(&(type), sizeof(char), 1, objFile) != 1) return -1;
         if (obj.constantPool.constants[i].type == CONST_STRING) {
-            if (writeWstring(obj.constantPool.constants[i].value.string_value,
-                             objFile))
-                return -1;
+            if (writeWstring(obj.constantPool.constants[i].value.string_value, objFile)) return -1;
         }
     }
     // ProcedureSize
-    if (fwrite(&(obj.procedureSize), sizeof(uint32_t), 1, objFile) != 1)
-        return -1;
+    if (fwrite(&(obj.procedureSize), sizeof(uint32_t), 1, objFile) != 1) return -1;
     // procedures
     for (int i = 0; i < obj.procedureSize; i++) {
 #ifdef HX_DEBUG

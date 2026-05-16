@@ -11,19 +11,21 @@
 typedef uint8_t Opcode;
 enum {
     OP_NOP = 0,
-    OP_LOAD_CONST,  // 加载常量至栈顶 OP_LOAD_CONST <paramType> <paramValue> |
+    OP_LOAD_CONST,  // 加载常量至栈顶 OP_LOAD_CONST <paramType> <paramValue>
+                    // |
     // OP_LOAD_CONST <constantIndex>
     OP_LOAD_VAR,   // 加载变量至栈顶
     OP_POP,        // 弹出
-    OP_STORE_VAR,  // 将栈顶值存入变量  OP_STORE_VAR <offest(u32)> <copySize(u32)>
+    OP_STORE_VAR,  // 将栈顶值存入变量  OP_STORE_VAR <offest(u32)>
+                   // <copySize(u32)>
     OP_ADD,
     OP_SUB,
     OP_MUL,
     OP_DIV,
-    OP_JMP,        //OP_JMP <instAddr(u32)>
+    OP_JMP,            // OP_JMP <instAddr(u32)>
     OP_JMP_CONDITION,  // JMP_CONDITION <栈顶为真时跳转的地址>
     // <为假时跳转的地址(>size时跳转至末尾)>
-    OP_CAL,            // CAL <procIndex>(u32) <paramCount>(u32)
+    OP_CAL,  // CAL <procIndex>(u32) <paramCount>(u32)
     OP_RET,
     OP_PRINT_STRING,
     // 类型转换
@@ -134,11 +136,9 @@ inline static int readInstruction(Instruction& instr, FILE* file) {
         if (fread(&typeChar, sizeof(char), 1, file) != 1) return -1;
         instr.params[i].type = (ParamType)typeChar;
 
-        if (fread(&(instr.params[i].size), sizeof(uint8_t), 1, file) != 1)
-            return -1;
+        if (fread(&(instr.params[i].size), sizeof(uint8_t), 1, file) != 1) return -1;
         if (fread(instr.params[i].value, 1, 8, file) != 8) return -1;
-        if (fread(&(instr.params[i].offest), sizeof(uint32_t), 1, file) != 1)
-            return -1;
+        if (fread(&(instr.params[i].offest), sizeof(uint32_t), 1, file) != 1) return -1;
     }
     return 0;
 }
@@ -151,8 +151,7 @@ inline int readObjectCode(FILE* file, ObjectCode& obj) {
         fclose(file);
         return -1;
     }
-    if (magic[0] != 'H' || magic[1] != 'X' || magic[2] != 'O' ||
-            magic[3] != 'C') {
+    if (magic[0] != 'H' || magic[1] != 'X' || magic[2] != 'O' || magic[3] != 'C') {
         fclose(file);
         return -1;
     }
@@ -162,8 +161,7 @@ inline int readObjectCode(FILE* file, ObjectCode& obj) {
         return -1;
     }
     if (version > HXVM_VERSION) {
-        fwprintf(errorStream, ERR_LABEL L"本虚拟机版本过低，文件要求：%f\n",
-                 version);
+        fwprintf(errorStream, ERR_LABEL L"本虚拟机版本过低，文件要求：%f\n", version);
         fclose(file);
         return -1;
     }
@@ -178,8 +176,7 @@ inline int readObjectCode(FILE* file, ObjectCode& obj) {
         fclose(file);
         return -1;
     }
-    obj.constantPool.constants =
-        (Constant*)malloc(sizeof(Constant) * obj.constantPool.size);
+    obj.constantPool.constants = (Constant*)malloc(sizeof(Constant) * obj.constantPool.size);
     for (uint32_t i = 0; i < obj.constantPool.size; i++) {
         char typeChar;
         if (fread(&typeChar, sizeof(char), 1, file) != 1) {
@@ -193,9 +190,7 @@ inline int readObjectCode(FILE* file, ObjectCode& obj) {
             // 重新记录当前平台的真实字节大小
             if (obj.constantPool.constants[i].value.string_value) {
                 obj.constantPool.constants[i].size =
-                    (uint32_t)(wcslen(
-                                   obj.constantPool.constants[i].value.string_value) *
-                               sizeof(wchar_t));
+                    (uint32_t)(wcslen(obj.constantPool.constants[i].value.string_value) * sizeof(wchar_t));
             }
         }
     }

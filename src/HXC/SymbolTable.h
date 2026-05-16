@@ -95,18 +95,18 @@ typedef struct IR_Program {
 
 // 变量处理：存储各变量与其对应的指令，用于回填、标记是否有用
 class Symbol {
-public:
+   public:
     bool isUsed;
     wchar_t* name;
     bool isTypeKnown;
     IR_DataType type;
     int size;
-    int offest;  //在栈中的偏移量
+    int offest;  // 在栈中的偏移量
     std::vector<int> instIndex;
     int procIndex;
 
     ~Symbol() {
-        //free(name);
+        // free(name);
         name = nullptr;
     }
 };
@@ -118,7 +118,7 @@ typedef struct SymbolTable {
     uint32_t var_size;
 } SymbolTable;
 class FunCallPitch {  // 回填CALL指令,被指向
-public:
+   public:
     FunCallPitch(IR_Function* ir_fun) noexcept : fun(ir_fun) {}
     IR_Function* fun;
     int index;
@@ -126,7 +126,7 @@ public:
 class FunCallPitchTable {
     std::vector<FunCallPitch*> pitches;
 
-public:
+   public:
     FunCallPitch* enter(IR_Function* fun) {
         for (int i = 0; i < pitches.size(); i++) {
             if (pitches.at(i)->fun == fun) return pitches.at(i);
@@ -140,8 +140,7 @@ public:
     void list() {
         fwprintf(logStream, L"回填函数列表：\n");
         for (int i = 0; i < pitches.size(); i++) {
-            fwprintf(logStream, L"\t%03u\33[1;32m%ls\33[0m index:%d\n", i,
-                     pitches.at(i)->fun->name, pitches.at(i)->index);
+            fwprintf(logStream, L"\t%03u\33[1;32m%ls\33[0m index:%d\n", i, pitches.at(i)->fun->name, pitches.at(i)->index);
         }
     }
 #endif
